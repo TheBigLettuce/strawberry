@@ -1,4 +1,4 @@
-package com.example.strawberry
+package com.github.thebiglettuce.strawberry
 
 import io.flutter.embedding.android.FlutterActivity
 
