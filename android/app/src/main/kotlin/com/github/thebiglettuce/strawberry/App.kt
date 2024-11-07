@@ -1,6 +1,9 @@
 package com.github.thebiglettuce.strawberry
 
 import android.app.Application
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.os.StrictMode
 
@@ -15,6 +18,14 @@ class App : Application() {
             StrictMode.setVmPolicy(
                 StrictMode.VmPolicy.Builder().detectAll().build()
             )
+        }
+    }
+}
+
+class LocaleBroadcastReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == Intent.ACTION_LOCALE_CHANGED) {
+//            createNotifChannels(context)
         }
     }
 }

@@ -5,10 +5,12 @@ gradle-wrapper.jar
 /gradlew.bat
 /local.properties
 GeneratedPluginRegistrant.java
+/.kotlin/
+/app/src/main/kotlin/com/github/thebiglettuce/strawberry/generated/*
+/build
 
 # Remember to never publicly share your keystore.
 # See https://flutter.dev/to/reference-keystore
 key.properties
 **/*.keystore
 **/*.jks
-/.kotlin/
