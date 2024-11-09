@@ -38,6 +38,7 @@ class Track {
     required this.artist,
     required this.album,
     required this.albumArtist,
+    required this.name,
   });
 
   final int id;
@@ -51,6 +52,7 @@ class Track {
   final String artist;
   final String album;
   final String albumArtist;
+  final String name;
 }
 
 class Album {
@@ -127,7 +129,7 @@ abstract interface class DataNotifications {
 @FlutterApi()
 abstract interface class PlaybackEvents {
   void addPlaying(bool playing);
-  void addSeek(double duration);
+  void addSeek(int duration);
   void addLooping(bool looping);
-  void addTrackChange(int id);
+  void addTrackChange(Track? track);
 }

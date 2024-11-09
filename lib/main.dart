@@ -5,10 +5,19 @@ import "package:strawberry/src/pages/home.dart";
 import "package:strawberry/src/platform/platform.dart";
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+
   final eventsImpl = PlaybackEventsImpl();
+  final storage = StorageDriver.memoryOnly();
+  final dataNotif = DataNotificationsImpl(storage: storage);
 
   PlaybackEvents.setUp(eventsImpl);
   Queue.setUp(eventsImpl.queue);
+  DataNotifications.setUp(dataNotif);
+
+  dataNotif.notifyAlbums();
+  dataNotif.notifyArtists();
+  dataNotif.notifyTracks();
 
   ThemeData buildTheme(Brightness brightness, Color accentColor) {
     return ThemeData.from(
@@ -31,7 +40,10 @@ void main() {
       GoRoute(
         name: "Home",
         path: "/",
-        builder: (context, state) => const HomePage(),
+        builder: (context, state) => HomePage(
+          storageDriver: storage,
+          player: eventsImpl,
+        ),
       ),
     ],
   );
