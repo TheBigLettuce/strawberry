@@ -2,22 +2,20 @@ import "package:flutter/material.dart";
 import "package:flutter_gen/gen_l10n/app_localizations.dart";
 import "package:go_router/go_router.dart";
 import "package:strawberry/src/pages/home.dart";
+import "package:strawberry/src/platform/generated/platform_api.g.dart";
 import "package:strawberry/src/platform/platform.dart";
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  final eventsImpl = PlaybackEventsImpl();
-  final storage = StorageDriver.memoryOnly();
-  final dataNotif = DataNotificationsImpl(storage: storage);
+  final stateManager = createStateManager();
 
-  PlaybackEvents.setUp(eventsImpl);
-  Queue.setUp(eventsImpl.queue);
-  DataNotifications.setUp(dataNotif);
+  final restoredData = await DataLoader().restore();
+  stateManager.restore(restoredData);
 
-  dataNotif.notifyAlbums();
-  dataNotif.notifyArtists();
-  dataNotif.notifyTracks();
+  stateManager.playerManager.data.notifyAlbums();
+  stateManager.playerManager.data.notifyArtists();
+  stateManager.playerManager.data.notifyTracks();
 
   ThemeData buildTheme(Brightness brightness, Color accentColor) {
     return ThemeData.from(
@@ -40,25 +38,24 @@ void main() {
       GoRoute(
         name: "Home",
         path: "/",
-        builder: (context, state) => HomePage(
-          storageDriver: storage,
-          player: eventsImpl,
-        ),
+        builder: (context, state) => const HomePage(),
       ),
     ],
   );
 
   runApp(
-    MaterialApp.router(
-      onGenerateTitle: (context) => AppLocalizations.of(context)!.appName,
-      themeAnimationCurve: Easing.standard,
-      themeAnimationDuration: const Duration(milliseconds: 300),
-      debugShowCheckedModeBanner: false,
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      theme: buildTheme(Brightness.light, Colors.purpleAccent),
-      darkTheme: buildTheme(Brightness.dark, Colors.purpleAccent),
-      routerConfig: routes,
+    stateManager.inject(
+      MaterialApp.router(
+        onGenerateTitle: (context) => AppLocalizations.of(context)!.appName,
+        themeAnimationCurve: Easing.standard,
+        themeAnimationDuration: const Duration(milliseconds: 300),
+        debugShowCheckedModeBanner: false,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        theme: buildTheme(Brightness.light, Colors.purpleAccent),
+        darkTheme: buildTheme(Brightness.dark, Colors.purpleAccent),
+        routerConfig: routes,
+      ),
     ),
   );
 }

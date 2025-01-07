@@ -99,12 +99,41 @@ abstract interface class PlaybackController {
 
 @HostApi()
 abstract interface class DataLoader {
+  RestoredData restore();
+
   @async
   void startLoadingAlbums();
   @async
   void startLoadingTracks();
   @async
   void startLoadingArtists();
+}
+
+class RestoredData {
+  const RestoredData({
+    required this.isLooping,
+    required this.isPlaying,
+    required this.progress,
+    required this.currentTrack,
+    required this.queue,
+  });
+
+  final bool isLooping;
+  final bool isPlaying;
+  final int progress;
+  final Track? currentTrack;
+  final List<Track> queue;
+}
+
+@HostApi()
+abstract interface class MediaThumbnails {
+  @async
+  String loadAndCache(int id, MediaThumbnailType type);
+}
+
+enum MediaThumbnailType {
+  album,
+  track;
 }
 
 @FlutterApi()

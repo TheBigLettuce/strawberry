@@ -208,7 +208,7 @@ class MediaLoader(private val context: Context) {
                 )
                 putString(
                     ContentResolver.QUERY_ARG_SQL_SORT_ORDER,
-                    "${MediaStore.Audio.Albums.ALBUM} DESC"
+                    "${MediaStore.Audio.Albums.ALBUM} ASC"
                 )
             }
 

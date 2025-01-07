@@ -10,6 +10,7 @@ import androidx.core.view.WindowCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters
@@ -20,22 +21,34 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.github.thebiglettuce.strawberry.generated.DataLoader
 import com.github.thebiglettuce.strawberry.generated.DataNotifications
+import com.github.thebiglettuce.strawberry.generated.MediaThumbnails
 import com.github.thebiglettuce.strawberry.generated.PlaybackController
 import com.github.thebiglettuce.strawberry.generated.PlaybackEvents
 import com.github.thebiglettuce.strawberry.generated.Queue
+import com.github.thebiglettuce.strawberry.generated.RestoredData
 import com.github.thebiglettuce.strawberry.generated.Track
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.android.FlutterFragment
 import io.flutter.embedding.android.FlutterFragmentActivity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.channels.produce
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.seconds
 
 class MainActivity : FlutterActivity() {
     private var player: Player? = null
     private var controllerFuture: ListenableFuture<MediaController>? = null
+    private var positionUpdater: ReceiveChannel<Long>? = null
 
     private val loader = MediaLoader(this)
 
+    @OptIn(UnstableApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.attributes.layoutInDisplayCutoutMode =
@@ -44,19 +57,59 @@ class MainActivity : FlutterActivity() {
 
         PlaybackController.setUp(
             flutterEngine!!.dartExecutor.binaryMessenger,
-            PlaybackControllerImpl(Queue(flutterEngine!!.dartExecutor.binaryMessenger)) {
+            PlaybackControllerImpl(
+                context.contentResolver,
+                Queue(flutterEngine!!.dartExecutor.binaryMessenger)
+            ) {
                 player
             })
 
+        MediaThumbnails.setUp(
+            flutterEngine!!.dartExecutor.binaryMessenger,
+            MediaThumbnailsImpl(this)
+        )
+
         DataLoader.setUp(
             flutterEngine!!.dartExecutor.binaryMessenger,
-            DataLoaderImpl(loader, DataNotifications(flutterEngine!!.dartExecutor.binaryMessenger))
+            DataLoaderImpl(
+                loader,
+                DataNotifications(flutterEngine!!.dartExecutor.binaryMessenger)
+            ) {
+                RestoredData(
+                    isLooping = player?.repeatMode.run {
+                        return@run this == Player.REPEAT_MODE_ONE
+                    },
+                    isPlaying = player?.isPlaying ?: false,
+                    currentTrack = player?.currentMediaItem?.run {
+                        return@run trackFromMediaItem(this)
+                    },
+                    progress = player?.currentPosition ?: 0L,
+                    queue = player?.run {
+                        val ret = mutableListOf<Track>()
+                        var count = mediaItemCount
+                        var pos = 0
+                        if (count == 0) {
+                            return@run ret
+                        }
+                        while (count > 0) {
+                            ret.add(trackFromMediaItem(getMediaItemAt(pos)))
+                            pos += 1
+                            count -= 1
+                        }
+
+                        return@run ret
+                    } ?: listOf(),
+                )
+            }
         )
     }
 
     override fun onDestroy() {
         PlaybackController.setUp(flutterEngine!!.dartExecutor.binaryMessenger, null)
-        DataLoader.setUp(flutterEngine!!.dartExecutor.binaryMessenger, null);
+        DataLoader.setUp(flutterEngine!!.dartExecutor.binaryMessenger, null)
+        MediaThumbnails.setUp(flutterEngine!!.dartExecutor.binaryMessenger, null)
+
+        suspendPositionUpdates()
 
         super.onDestroy()
 
@@ -71,9 +124,15 @@ class MainActivity : FlutterActivity() {
         controllerFuture?.addListener(
             {
                 player = controllerFuture?.get()?.apply {
-                    playWhenReady = true
+//                    playWhenReady = true
                 }
-                player?.addListener(PlayerEventsListener(PlaybackEvents(flutterEngine!!.dartExecutor.binaryMessenger)))
+                player?.addListener(
+                    PlayerEventsListener(
+                        PlaybackEvents(flutterEngine!!.dartExecutor.binaryMessenger),
+                        ::watchPositionUpdates,
+                        ::suspendPositionUpdates,
+                    )
+                )
             },
             MoreExecutors.directExecutor(),
         )
@@ -88,12 +147,38 @@ class MainActivity : FlutterActivity() {
             it.release()
             player = null
         }
+        suspendPositionUpdates()
 
         super.onStop()
     }
+
+
+    @kotlin.OptIn(ExperimentalCoroutinesApi::class)
+    fun watchPositionUpdates(events: PlaybackEvents) {
+        positionUpdater?.cancel()
+        positionUpdater = CoroutineScope(Dispatchers.IO).produce {
+            while (true) {
+                CoroutineScope(Dispatchers.Main).launch {
+                    events.addSeek(player?.currentPosition ?: 0) {
+
+                    }
+                }
+                delay(1.seconds)
+            }
+        }
+    }
+
+    private fun suspendPositionUpdates() {
+        positionUpdater?.cancel()
+        positionUpdater = null
+    }
 }
 
-class PlayerEventsListener(private val events: PlaybackEvents) : Player.Listener {
+class PlayerEventsListener(
+    private val events: PlaybackEvents,
+    private val watchPositionUpdates: (events: PlaybackEvents) -> Unit,
+    private val suspendPositionUpdates: () -> Unit,
+) : Player.Listener {
     override fun onEvents(player: Player, events: Player.Events) {
         super.onEvents(player, events)
         if (events.contains(Player.EVENT_CUES)) {
@@ -139,18 +224,7 @@ class PlayerEventsListener(private val events: PlaybackEvents) : Player.Listener
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
         super.onMediaItemTransition(mediaItem, reason)
         events.addTrackChange(
-            if (mediaItem == null) null else Track(
-                track = mediaItem.mediaMetadata.trackNumber?.toLong() ?: 0L,
-                discNumber = mediaItem.mediaMetadata.discNumber?.toLong() ?: 0L,
-                duration = mediaItem.mediaMetadata.durationMs ?: 0L,
-                artist = mediaItem.mediaMetadata.artist?.toString() ?: "",
-                album = mediaItem.mediaMetadata.albumTitle?.toString() ?: "",
-                albumArtist = mediaItem.mediaMetadata.albumArtist?.toString() ?: "",
-                name = mediaItem.mediaMetadata.displayTitle?.toString() ?: "",
-                id = mediaItem.requestMetadata.extras!!.getLong("id"),
-                albumId = mediaItem.requestMetadata.extras!!.getLong("albumId"),
-                dateModified = mediaItem.requestMetadata.extras!!.getLong("dateModified"),
-            )
+            if (mediaItem == null) null else trackFromMediaItem(mediaItem)
         ) {}
 
         Log.i("PlayerEvents.mediaTransition", mediaItem?.mediaMetadata?.displayTitle.toString())
@@ -159,6 +233,12 @@ class PlayerEventsListener(private val events: PlaybackEvents) : Player.Listener
     override fun onIsPlayingChanged(isPlaying: Boolean) {
         super.onIsPlayingChanged(isPlaying)
         events.addPlaying(isPlaying) {}
+
+        if (isPlaying) {
+            watchPositionUpdates(events)
+        } else {
+            suspendPositionUpdates()
+        }
 
         Log.i("PlayerEvents.playingChanged", isPlaying.toString())
     }
@@ -185,3 +265,17 @@ class PlayerEventsListener(private val events: PlaybackEvents) : Player.Listener
         Log.i("PlayerEvents.positionDiscontinuity", newPosition.positionMs.toString())
     }
 }
+
+@OptIn(UnstableApi::class)
+fun trackFromMediaItem(mediaItem: MediaItem): Track = Track(
+    track = mediaItem.mediaMetadata.trackNumber?.toLong() ?: 0L,
+    discNumber = mediaItem.mediaMetadata.discNumber?.toLong() ?: 0L,
+    artist = mediaItem.mediaMetadata.artist?.toString() ?: "",
+    album = mediaItem.mediaMetadata.albumTitle?.toString() ?: "",
+    albumArtist = mediaItem.mediaMetadata.albumArtist?.toString() ?: "",
+    name = mediaItem.requestMetadata.extras!!.getString("name") ?: "",
+    duration = mediaItem.requestMetadata.extras!!.getLong("duration"),
+    id = mediaItem.requestMetadata.extras!!.getLong("id"),
+    albumId = mediaItem.requestMetadata.extras!!.getLong("albumId"),
+    dateModified = mediaItem.requestMetadata.extras!!.getLong("dateModified"),
+)

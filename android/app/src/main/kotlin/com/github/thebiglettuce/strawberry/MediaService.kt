@@ -1,8 +1,12 @@
 package com.github.thebiglettuce.strawberry
 
+import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.DefaultMediaNotificationProvider
+import androidx.media3.session.MediaNotification
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 
@@ -13,6 +17,7 @@ class MediaService : MediaSessionService() {
         controllerInfo: MediaSession.ControllerInfo,
     ): MediaSession? = mediaSession
 
+    @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
 
@@ -26,6 +31,11 @@ class MediaService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .build()
         mediaSession = MediaSession.Builder(this, player).build()
+//        mediaSession?.apply {
+//            setMediaNotificationProvider(
+//                DefaultMediaNotificationProvider.Builder(this@MediaService). .build()
+//            )
+//        }
     }
 
     override fun onDestroy() {

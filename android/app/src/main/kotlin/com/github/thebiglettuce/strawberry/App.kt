@@ -6,8 +6,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.os.StrictMode
+import coil3.ImageLoader
+import coil3.SingletonImageLoader
+import coil3.memory.MemoryCache
 
 class App : Application() {
+    val thumbnailer = Thumbnailer(this)
+
     override fun onCreate() {
         super.onCreate()
         val appFlags = applicationInfo.flags
@@ -18,6 +23,16 @@ class App : Application() {
             StrictMode.setVmPolicy(
                 StrictMode.VmPolicy.Builder().detectAll().build()
             )
+        }
+
+        thumbnailer.initMover()
+
+        SingletonImageLoader.setSafe { context ->
+            ImageLoader.Builder(context)
+                .memoryCache {
+                    MemoryCache.Builder().maxSizePercent(context, 0.25).build()
+                }
+                .build()
         }
     }
 }

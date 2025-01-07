@@ -1,28 +1,54 @@
 package com.github.thebiglettuce.strawberry
 
+import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.Context
+import android.graphics.Bitmap
 import android.os.Bundle
 import android.provider.MediaStore
+import android.util.Log
+import android.util.Size
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaItem.RequestMetadata
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.source.ConcatenatingMediaSource2
 import com.github.thebiglettuce.strawberry.generated.DataLoader
 import com.github.thebiglettuce.strawberry.generated.DataNotifications
+import com.github.thebiglettuce.strawberry.generated.MediaThumbnailType
+import com.github.thebiglettuce.strawberry.generated.MediaThumbnails
 import com.github.thebiglettuce.strawberry.generated.PlaybackController
 import com.github.thebiglettuce.strawberry.generated.Queue
+import com.github.thebiglettuce.strawberry.generated.RestoredData
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.nio.ByteBuffer
+
+class MediaThumbnailsImpl(private val context: Context) : MediaThumbnails {
+    override fun loadAndCache(
+        id: Long,
+        type: MediaThumbnailType,
+        callback: (Result<String>) -> Unit,
+    ) {
+        val thumbnailer = (context.applicationContext as App).thumbnailer
+        thumbnailer.getCachedThumbnail(CacheLocker.Id(id, type)) {
+            callback(Result.success(it))
+        }
+    }
+}
 
 class DataLoaderImpl(
     private val loader: MediaLoader,
     private val data: DataNotifications,
+    private val makeRestoredData: () -> RestoredData,
 ) :
     DataLoader {
+    override fun restore(): RestoredData {
+        return makeRestoredData()
+    }
+
     override fun startLoadingAlbums(callback: (Result<Unit>) -> Unit) {
         loader.loadAlbums {
             CoroutineScope(Dispatchers.Main).launch {
@@ -51,7 +77,11 @@ class DataLoaderImpl(
     }
 }
 
-class PlaybackControllerImpl(private val queue: Queue, private val player: () -> Player?) :
+class PlaybackControllerImpl(
+    private val contentResolver: ContentResolver,
+    private val queue: Queue,
+    private val player: () -> Player?,
+) :
     PlaybackController {
     override fun seek(sec: Long, callback: (Result<Unit>) -> Unit) {
         player()?.seekTo(sec)
@@ -74,20 +104,22 @@ class PlaybackControllerImpl(private val queue: Queue, private val player: () ->
             val track = result.getOrNull() ?: return@byId
 
             player()?.apply {
+                val itemUri = ContentUris.withAppendedId(
+                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                    track.id
+                )
+
                 setMediaItem(
                     MediaItem.Builder()
-                        .setUri(
-                            ContentUris.withAppendedId(
-                                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                                track.id
-                            )
-                        )
+                        .setUri(itemUri)
                         .setRequestMetadata(
                             RequestMetadata.Builder()
                                 .setExtras(Bundle().apply {
                                     putLong("id", track.id)
                                     putLong("albumId", track.albumId)
                                     putLong("dateModified", track.dateModified)
+                                    putLong("duration", track.duration)
+                                    putString("name", track.name)
                                 })
                                 .build()
                         )
