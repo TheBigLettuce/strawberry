@@ -1,4 +1,4 @@
-/* 
+/*
   Strawberry, a music player
   Copyright (C) 2024  Bob
 
