@@ -1,3 +1,21 @@
+/*
+  Strawberry, a music player
+  Copyright (C) 2024  Bob
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
 import "dart:async";
 
 import "package:flutter/foundation.dart";
@@ -15,6 +33,22 @@ export "package:strawberry/src/platform/generated/platform_api.g.dart"
         PlaybackEvents,
         Queue,
         Track;
+
+extension FormatYearsAlbumExt on platform.Album {
+  String formatYears() {
+    if (firstYear == 0 && secondYear == 0) {
+      return "";
+    }
+
+    if (firstYear == secondYear) {
+      return "$firstYear";
+    }
+
+    return "$firstYear—$album";
+  }
+}
+
+final platform.PlaybackController _controller = platform.PlaybackController();
 
 StateManager createStateManager() {
   final stateManager = StateManager._memoryOnly();
@@ -148,15 +182,19 @@ class QueueListNotifier extends InheritedWidget {
     super.key,
     required this.queueList,
     required this.count,
+    required this.currentTrack,
     required super.child,
   });
 
   final QueueList queueList;
+  final platform.Track? currentTrack;
   final int count;
 
   @override
   bool updateShouldNotify(QueueListNotifier oldWidget) {
-    return count != oldWidget.count || queueList != oldWidget.queueList;
+    return count != oldWidget.count ||
+        queueList != oldWidget.queueList ||
+        currentTrack != oldWidget.currentTrack;
   }
 }
 
@@ -193,16 +231,72 @@ abstract interface class StorageDriver {
   void dispose();
 }
 
+abstract interface class LiveBucketData<T> extends Iterable<T> {
+  T operator [](int i);
+
+  Widget inject(Widget child);
+
+  void dispose();
+}
+
+abstract class _StorageBucketLiveData<T> extends LiveBucketData<T> {
+  _StorageBucketLiveData(_StorageBucket<T> upstreamBucket) {
+    _countEvents = upstreamBucket._events.stream.listen((e) {
+      data.clear();
+      loadFilteredValues(upstreamBucket.storage);
+      _events.add(data.length);
+    });
+
+    loadFilteredValues(upstreamBucket.storage);
+  }
+
+  late final StreamSubscription<int> _countEvents;
+  final _events = StreamController<int>.broadcast();
+
+  final data = <T>[];
+
+  @override
+  T operator [](int i) => data[i];
+
+  @override
+  int get length => data.length;
+
+  void loadFilteredValues(List<T> upstream);
+
+  @override
+  Widget inject(Widget child);
+
+  @override
+  Iterator<T> get iterator => data.iterator;
+
+  @override
+  void dispose() {
+    _events.close();
+    _countEvents.cancel();
+  }
+}
+
 sealed class AlbumsBucket extends StorageBucket<platform.Album> {
+  LiveAlbumsBucket query(String albumName);
+  LiveAlbumsBucket queryArtistId(int artistId);
+
   static AlbumsBucket of(BuildContext context) {
     final widget =
         context.dependOnInheritedWidgetOfExactType<AlbumBucketNotifier>();
 
     return widget!.bucket;
   }
+
+  static LiveAlbumsBucket queryArtistIdOf(BuildContext context, int artistId) {
+    final widget = context.getInheritedWidgetOfExactType<AlbumBucketNotifier>();
+
+    return widget!.bucket.queryArtistId(artistId);
+  }
 }
 
 sealed class ArtistsBucket extends StorageBucket<platform.Artist> {
+  LiveArtistsBucket query(String artistName);
+
   static ArtistsBucket of(BuildContext context) {
     final widget =
         context.dependOnInheritedWidgetOfExactType<ArtistBucketNotifier>();
@@ -211,12 +305,146 @@ sealed class ArtistsBucket extends StorageBucket<platform.Artist> {
   }
 }
 
+sealed class LiveArtistsBucket extends LiveBucketData<platform.Artist> {
+  static LiveArtistsBucket of(BuildContext context) {
+    final widget =
+        context.dependOnInheritedWidgetOfExactType<LiveArtistsBucketNotifier>();
+
+    return widget!.bucketData;
+  }
+}
+
+class LiveArtistsBucketNotifier extends InheritedWidget {
+  const LiveArtistsBucketNotifier({
+    super.key,
+    required this.count,
+    required this.bucketData,
+    required super.child,
+  });
+
+  final LiveArtistsBucket bucketData;
+  final int count;
+
+  @override
+  bool updateShouldNotify(LiveArtistsBucketNotifier oldWidget) {
+    return bucketData != oldWidget.bucketData || count != oldWidget.count;
+  }
+}
+
+sealed class LiveTracksBucket extends LiveBucketData<platform.Track> {
+  platform.Album? get associatedAlbum;
+
+  static LiveTracksBucket of(BuildContext context) {
+    final widget =
+        context.dependOnInheritedWidgetOfExactType<LiveTracksBucketNotifier>();
+
+    return widget!.bucketData;
+  }
+}
+
+sealed class CombinedLiveTracksBucket {
+  List<(platform.Album, List<platform.Track>)> get sortedTracks;
+
+  Widget inject(Widget child);
+
+  static CombinedLiveTracksBucket of(BuildContext context) {
+    final widget = context
+        .dependOnInheritedWidgetOfExactType<CombinedLiveTracksBucketNotifier>();
+
+    return widget!.bucketData;
+  }
+
+  void dispose();
+}
+
+class LiveTracksBucketNotifier extends InheritedWidget {
+  const LiveTracksBucketNotifier({
+    super.key,
+    required this.count,
+    required this.bucketData,
+    required super.child,
+  });
+
+  final LiveTracksBucket bucketData;
+  final int count;
+
+  @override
+  bool updateShouldNotify(LiveTracksBucketNotifier oldWidget) {
+    return bucketData != oldWidget.bucketData || count != oldWidget.count;
+  }
+}
+
+sealed class LiveAlbumsBucket extends LiveBucketData<platform.Album> {
+  static LiveAlbumsBucket of(BuildContext context) {
+    final widget =
+        context.dependOnInheritedWidgetOfExactType<LiveAlbumsBucketNotifier>();
+
+    return widget!.bucketData;
+  }
+}
+
+class LiveAlbumsBucketNotifier extends InheritedWidget {
+  const LiveAlbumsBucketNotifier({
+    super.key,
+    required this.count,
+    required this.bucketData,
+    required super.child,
+  });
+
+  final LiveAlbumsBucket bucketData;
+  final int count;
+
+  @override
+  bool updateShouldNotify(LiveAlbumsBucketNotifier oldWidget) {
+    return bucketData != oldWidget.bucketData || count != oldWidget.count;
+  }
+}
+
+class CombinedLiveTracksBucketNotifier extends InheritedWidget {
+  const CombinedLiveTracksBucketNotifier({
+    super.key,
+    required this.count,
+    required this.bucketData,
+    required super.child,
+  });
+
+  final CombinedLiveTracksBucket bucketData;
+  final int count;
+
+  @override
+  bool updateShouldNotify(CombinedLiveTracksBucketNotifier oldWidget) {
+    return bucketData != oldWidget.bucketData || count != oldWidget.count;
+  }
+}
+
 sealed class TracksBucket extends StorageBucket<platform.Track> {
+  LiveTracksBucket query(String trackName);
+  LiveTracksBucket queryAlbum(platform.Album album);
+  CombinedLiveTracksBucket queryAlbums(List<platform.Album> albums);
+
   static TracksBucket of(BuildContext context) {
     final widget =
         context.dependOnInheritedWidgetOfExactType<TrackBucketNotifier>();
 
     return widget!.bucket;
+  }
+
+  static LiveTracksBucket queryAlbumOf(
+    BuildContext context,
+    platform.Album album,
+  ) {
+    final widget = context.getInheritedWidgetOfExactType<TrackBucketNotifier>();
+
+    return widget!.bucket.queryAlbum(album);
+  }
+
+  static CombinedLiveTracksBucket queryAlbumsOf(
+    BuildContext context,
+    List<platform.Album> albums,
+  ) {
+    final widget = context.getInheritedWidgetOfExactType<TrackBucketNotifier>();
+
+    return widget!.bucket.queryAlbums(albums);
   }
 }
 
@@ -292,7 +520,7 @@ abstract class _StorageBucket<T> extends StorageBucket<T> {
   _StorageBucket();
 
   final _events = StreamController<int>.broadcast();
-  String _generation = "";
+  // String _generation = "";
   final List<T> storage = [];
 
   @override
@@ -309,12 +537,12 @@ abstract class _StorageBucket<T> extends StorageBucket<T> {
     storage.addAll(elements);
     _events.add(storage.length);
 
-    print(elements);
+    // print(elements);
   }
 
   @override
   void setGeneration(String generation) {
-    _generation = generation;
+    // _generation = generation;
   }
 
   @override
@@ -330,8 +558,191 @@ abstract class _StorageBucket<T> extends StorageBucket<T> {
   }
 }
 
+class _CombinedLiveTracksBucket extends CombinedLiveTracksBucket {
+  _CombinedLiveTracksBucket(
+    _StorageBucket<platform.Track> upstreamBucket,
+    List<platform.Album> albums,
+  ) {
+    _countEvents = upstreamBucket._events.stream.listen((e) {
+      filterTracks(upstreamBucket.storage, albums);
+    });
+
+    filterTracks(upstreamBucket.storage, albums);
+  }
+
+  late final StreamSubscription<int> _countEvents;
+  final _events = StreamController<int>.broadcast();
+
+  @override
+  final List<(platform.Album, List<platform.Track>)> sortedTracks = [];
+
+  @override
+  Widget inject(Widget child) {
+    return StreamBuilder(
+      stream: _events.stream,
+      builder: (context, snapshot) => CombinedLiveTracksBucketNotifier(
+        count: sortedTracks.length,
+        bucketData: this,
+        child: child,
+      ),
+    );
+  }
+
+  void filterTracks(
+    List<platform.Track> bucketStorage,
+    List<platform.Album> albums,
+  ) {
+    final ret = <int, (platform.Album, List<platform.Track>)>{};
+
+    for (final e in bucketStorage) {
+      for (final album in albums) {
+        if (album.albumId == e.albumId) {
+          final l = ret[album.albumId] ?? (album, []);
+          l.$2.add(e);
+
+          ret[album.albumId] = l;
+        }
+      }
+    }
+
+    sortedTracks.clear();
+    for (final e in albums) {
+      final a = ret[e.albumId];
+      if (a == null) {
+        continue;
+      }
+      sortedTracks.add(a);
+    }
+    _events.add(sortedTracks.length);
+
+    return;
+  }
+
+  @override
+  void dispose() {
+    _events.close();
+    _countEvents.cancel();
+  }
+}
+
+class _LiveArtistsBucket extends _StorageBucketLiveData<platform.Artist>
+    implements LiveArtistsBucket {
+  _LiveArtistsBucket(super.upstreamBucket, this.artistName);
+
+  final String artistName;
+
+  @override
+  Widget inject(Widget child) {
+    return StreamBuilder(
+      stream: _events.stream,
+      builder: (context, snapshot) => LiveArtistsBucketNotifier(
+        count: data.length,
+        bucketData: this,
+        child: child,
+      ),
+    );
+  }
+
+  @override
+  void loadFilteredValues(List<platform.Artist> upstream) {
+    for (final e in upstream) {
+      if (e.artist.startsWith(artistName)) {
+        data.add(e);
+      }
+    }
+  }
+}
+
+class _LiveTracksBucket extends _StorageBucketLiveData<platform.Track>
+    implements LiveTracksBucket {
+  _LiveTracksBucket(
+    super.upstreamBucket,
+    this.filterFn,
+    this.associatedAlbum,
+  );
+
+  @override
+  final platform.Album? associatedAlbum;
+
+  final void Function(List<platform.Track> data, List<platform.Track> upstream)
+      filterFn;
+
+  @override
+  Widget inject(Widget child) {
+    return StreamBuilder(
+      stream: _events.stream,
+      builder: (context, snapshot) => LiveTracksBucketNotifier(
+        count: data.length,
+        bucketData: this,
+        child: child,
+      ),
+    );
+  }
+
+  @override
+  void loadFilteredValues(List<platform.Track> upstream) {
+    filterFn(data, upstream);
+  }
+}
+
+class _LiveAlbumBucket extends _StorageBucketLiveData<platform.Album>
+    implements LiveAlbumsBucket {
+  _LiveAlbumBucket(super.upstreamBucket, this.filterFn);
+
+  final void Function(List<platform.Album> data, List<platform.Album> upstream)
+      filterFn;
+
+  @override
+  Widget inject(Widget child) {
+    return StreamBuilder(
+      stream: _events.stream,
+      builder: (context, snapshot) => LiveAlbumsBucketNotifier(
+        count: data.length,
+        bucketData: this,
+        child: child,
+      ),
+    );
+  }
+
+  @override
+  void loadFilteredValues(List<platform.Album> upstream) {
+    filterFn(data, upstream);
+  }
+
+  @override
+  String toString() => data.toString();
+}
+
 class _AlbumBucket extends _StorageBucket<platform.Album>
     implements AlbumsBucket {
+  @override
+  LiveAlbumsBucket query(String albumName) {
+    final albumNameLowerCase = albumName.toLowerCase();
+
+    return _LiveAlbumBucket(
+      this,
+      (data, upstream) {
+        for (final e in upstream) {
+          if (e.album.toLowerCase().startsWith(albumNameLowerCase)) {
+            data.add(e);
+          }
+        }
+      },
+    );
+  }
+
+  @override
+  LiveAlbumsBucket queryArtistId(int artistId) => _LiveAlbumBucket(
+        this,
+        (data, upstream) {
+          for (final e in upstream) {
+            if (e.artistId == artistId) {
+              data.add(e);
+            }
+          }
+        },
+      );
+
   @override
   Widget inject(Widget child) {
     return StreamBuilder(
@@ -348,6 +759,10 @@ class _AlbumBucket extends _StorageBucket<platform.Album>
 class _ArtistsBucket extends _StorageBucket<platform.Artist>
     implements ArtistsBucket {
   @override
+  LiveArtistsBucket query(String artistName) =>
+      _LiveArtistsBucket(this, artistName);
+
+  @override
   Widget inject(Widget child) {
     return StreamBuilder(
       stream: _events.stream,
@@ -362,6 +777,43 @@ class _ArtistsBucket extends _StorageBucket<platform.Artist>
 
 class _TracksBucket extends _StorageBucket<platform.Track>
     implements TracksBucket {
+  @override
+  LiveTracksBucket query(String trackName) {
+    final trackNameLower = trackName.toLowerCase();
+
+    return _LiveTracksBucket(
+      this,
+      (data, upstream) {
+        for (final e in upstream) {
+          if (e.name.toLowerCase().startsWith(trackNameLower)) {
+            data.add(e);
+          }
+        }
+      },
+      null,
+    );
+  }
+
+  @override
+  LiveTracksBucket queryAlbum(platform.Album album) => _LiveTracksBucket(
+        this,
+        (data, upstream) {
+          for (final e in upstream) {
+            if (e.albumId == album.albumId) {
+              data.add(e);
+            }
+          }
+        },
+        album,
+      );
+
+  @override
+  CombinedLiveTracksBucket queryAlbums(List<platform.Album> albums) =>
+      _CombinedLiveTracksBucket(
+        this,
+        albums,
+      );
+
   @override
   Widget inject(Widget child) {
     return StreamBuilder(
@@ -408,20 +860,29 @@ extension PlayerStatePlaybackExt on Player {
   void flipIsPlaying(BuildContext context) {
     final isPlaying = PlayerStateQuery.isPlayingOf(context);
     if (isPlaying) {
-      controller.pause();
+      _controller.pause();
     } else {
-      controller.play();
+      _controller.play();
     }
   }
 
   void flipIsLooping(BuildContext context) {
     final isLooping = PlayerStateQuery.loopingOf(context);
-    controller.setLooping(!isLooping);
+    _controller.setLooping(!isLooping);
+  }
+
+  void changeOrPlay(BuildContext context, platform.Track track, int idx) {
+    if (track.id != queue.currentTrack?.id) {
+      queue.setAt(idx);
+    } else {
+      flipIsPlaying(context);
+    }
   }
 }
 
 abstract interface class Player {
-  platform.PlaybackController get controller;
+  void toNext();
+  void toPrevious();
 
   QueueList get queue;
 
@@ -575,9 +1036,19 @@ abstract interface class QueueList extends Iterable<platform.Track>
   platform.Track operator [](int id);
   void operator []=(int id, platform.Track track);
 
-  void clearAndPlay(platform.Track track);
+  int currentTrackIdx();
+
+  void clearAndPlay(List<platform.Track> tracks);
+  void clearStop();
   void add(platform.Track track);
-  void shiftPositions(platform.Track from, platform.Track to);
+  void addAll(List<platform.Track> tracks);
+  void removeAt(int idx);
+  void setAt(int idx);
+  void removeTrack(platform.Track track);
+  void shiftTracks(platform.Track from, platform.Track to);
+  void shiftIndex(int i1, int i2);
+
+  bool containsTrack(platform.Track track);
 
   Widget inject(Widget child);
 
@@ -594,8 +1065,22 @@ abstract interface class QueueList extends Iterable<platform.Track>
     return widget!.queueList;
   }
 
-  static void clearAndPlayOf(BuildContext context, platform.Track track) =>
-      _getOf(context).clearAndPlay(track);
+  static void clearAndPlayOf(
+    BuildContext context,
+    List<platform.Track> tracks,
+  ) =>
+      _getOf(context).clearAndPlay(tracks);
+
+  static void addOf(BuildContext context, platform.Track track) =>
+      _getOf(context).add(track);
+
+  static void addAllOf(BuildContext context, List<platform.Track> tracks) =>
+      _getOf(context).addAll(tracks);
+
+  static void removeAtOf(BuildContext context, int idx) =>
+      _getOf(context).removeAt(idx);
+
+  static void clearStopOf(BuildContext context) => _getOf(context).clearStop();
 
   @override
   platform.Track? current() => currentTrack;
@@ -605,6 +1090,9 @@ abstract interface class QueueList extends Iterable<platform.Track>
 
   @override
   platform.Track? byId(int id) => firstWhere((e) => e.id == id);
+
+  @override
+  void ensureQueueClear() => clearStop();
 }
 
 @immutable
@@ -694,6 +1182,7 @@ class _QueueList extends QueueList {
 
   final _stream = StreamController<int>.broadcast();
   final order = <platform.Track>[];
+  final _map = <int, void>{};
 
   @override
   platform.Track operator [](int idx) => order[idx];
@@ -725,12 +1214,33 @@ class _QueueList extends QueueList {
   }
 
   @override
+  int currentTrackIdx() {
+    if (currentTrack == null) {
+      return 0;
+    }
+
+    return order.indexWhere((e) => e.id == currentTrack!.id);
+  }
+
+  @override
+  void ensureCurrentTrack(platform.Track? track) {
+    if (track?.id != currentTrack?.id) {
+      currentTrack = track;
+      _stream.add(order.length);
+    }
+  }
+
+  @override
+  bool containsTrack(platform.Track track) => _map.containsKey(track.id);
+
+  @override
   Widget inject(Widget child) {
     return StreamBuilder(
       stream: _stream.stream,
       builder: (context, snapshot) => QueueListNotifier(
         queueList: this,
         count: order.length,
+        currentTrack: currentTrack,
         child: child,
       ),
     );
@@ -738,20 +1248,90 @@ class _QueueList extends QueueList {
 
   @override
   void add(platform.Track track) {
+    if (order.isEmpty) {
+      clearAndPlay([track]);
+    }
+
+    if (_map.containsKey(track.id)) {
+      return;
+    }
+
     order.add(track);
     _stream.add(order.length);
+    _controller.addTrack(track.id);
+    _map[track.id] = null;
   }
 
   @override
-  void clearAndPlay(platform.Track track) {
+  void addAll(List<platform.Track> tracks, [bool set = false]) {
+    final actualTracks = <platform.Track>[];
+
+    for (final e in tracks) {
+      if (_map.containsKey(e.id)) {
+        continue;
+      }
+
+      _map[e.id] = null;
+      order.add(e);
+      actualTracks.add(e);
+    }
+
+    _stream.add(order.length);
+    if (set) {
+      _controller.setTracks(actualTracks);
+    } else {
+      _controller.addTracks(actualTracks);
+    }
+  }
+
+  @override
+  void clearAndPlay(List<platform.Track> tracks) {
+    _map.clear();
     order.clear();
-    order.add(track);
-    _stream.add(order.length);
-    player.controller.changeTrack(track.id);
+
+    addAll(tracks, true);
   }
 
   @override
-  void shiftPositions(platform.Track from, platform.Track to) {
+  void clearStop() {
+    _map.clear();
+    order.clear();
+
+    _stream.add(order.length);
+    _controller.clearStop();
+    currentTrack = null;
+  }
+
+  @override
+  void removeAt(int idx) {
+    _controller.removeTrack(idx);
+    final e = order.removeAt(idx);
+    _map.remove(e.id);
+    _stream.add(order.length);
+
+    if (order.isEmpty) {
+      currentTrack = null;
+    }
+  }
+
+  @override
+  void removeTrack(platform.Track track) {
+    final idx = order.indexWhere((e) => e.id == track.id);
+    if (idx == -1) {
+      return;
+    }
+
+    removeAt(idx);
+  }
+
+  @override
+  void setAt(int idx) {
+    _controller.setIndex(idx);
+    _stream.add(order.length);
+  }
+
+  @override
+  void shiftTracks(platform.Track from, platform.Track to) {
     final idx1 = order.indexWhere((e) => e.id == from.id);
     final idx2 = order.indexWhere((e) => e.id == to.id);
 
@@ -759,11 +1339,16 @@ class _QueueList extends QueueList {
       return;
     }
 
-    final e1 = order[idx1];
-    final e2 = order[idx2];
-    order[idx1] = e2;
-    order[idx2] = e1;
+    shiftIndex(idx1, idx2);
+  }
+
+  @override
+  void shiftIndex(int i1, int i2) {
+    final e1 = order.removeAt(i1);
+    order.insert(i2, e1);
     _stream.add(order.length);
+
+    _controller.swapIndexes(i1, i2);
   }
 
   void dispose() {
@@ -785,7 +1370,14 @@ class PlaybackEventsImpl implements platform.PlaybackEvents, Player {
   final _events = StreamController<PlaybackEvent>.broadcast();
 
   @override
-  platform.PlaybackController controller = platform.PlaybackController();
+  void toNext() {
+    _controller.next();
+  }
+
+  @override
+  void toPrevious() {
+    _controller.prev();
+  }
 
   @override
   void restore(platform.RestoredData data) {

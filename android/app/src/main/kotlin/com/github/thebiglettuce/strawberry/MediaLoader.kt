@@ -51,7 +51,7 @@ class MediaLoader(private val context: Context) {
                 )
                 putString(
                     ContentResolver.QUERY_ARG_SQL_SORT_ORDER,
-                    "${MediaStore.Audio.Media.ALBUM} DESC"
+                    "${MediaStore.Audio.Media.ALBUM} DESC , ${MediaStore.Audio.Media.TRACK} ASC"
                 )
             }
 
@@ -87,6 +87,8 @@ class MediaLoader(private val context: Context) {
                         list.clear()
                     }
 
+                    val track = cursor.getLong(trackCol)
+
                     list.add(
                         Track(
                             id = cursor.getLong(idCol),
@@ -95,7 +97,7 @@ class MediaLoader(private val context: Context) {
                             albumArtist = cursor.getStringOrNull(albumArtistCol) ?: "",
                             artist = cursor.getString(artistCol),
                             dateModified = cursor.getLong(dateModifiedCol),
-                            track = cursor.getLong(trackCol),
+                            track = if (track > 1000) trackNumberFrom1000(track) else track,
                             duration = cursor.getLong(durationCol),
                             discNumber = cursor.getLong(discNumberCol),
                             name = cursor.getString(displayNameCol)
@@ -112,6 +114,21 @@ class MediaLoader(private val context: Context) {
 
             callback(listOf())
         }
+    }
+
+    private fun trackNumberFrom1000(track: Long): Long {
+        var track = track
+        var num = 0L
+
+        val firstDigit = track % 10
+        track /= 10
+        val secondDigit = track % 10
+
+        if (secondDigit == 0L) {
+            return firstDigit
+        }
+
+        return (secondDigit * 10) + firstDigit
     }
 
     fun loadArtists(callback: suspend (List<Artist>) -> Unit) {
@@ -208,7 +225,7 @@ class MediaLoader(private val context: Context) {
                 )
                 putString(
                     ContentResolver.QUERY_ARG_SQL_SORT_ORDER,
-                    "${MediaStore.Audio.Albums.ALBUM} ASC"
+                    "${MediaStore.Audio.Albums.ARTIST} ASC , ${MediaStore.Audio.Albums.LAST_YEAR} DESC"
                 )
             }
 

@@ -11,6 +11,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Metadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters
@@ -75,30 +76,37 @@ class MainActivity : FlutterActivity() {
                 loader,
                 DataNotifications(flutterEngine!!.dartExecutor.binaryMessenger)
             ) {
-                RestoredData(
-                    isLooping = player?.repeatMode.run {
-                        return@run this == Player.REPEAT_MODE_ONE
-                    },
-                    isPlaying = player?.isPlaying ?: false,
-                    currentTrack = player?.currentMediaItem?.run {
-                        return@run trackFromMediaItem(this)
-                    },
-                    progress = player?.currentPosition ?: 0L,
-                    queue = player?.run {
-                        val ret = mutableListOf<Track>()
-                        var count = mediaItemCount
-                        var pos = 0
-                        if (count == 0) {
-                            return@run ret
-                        }
-                        while (count > 0) {
-                            ret.add(trackFromMediaItem(getMediaItemAt(pos)))
-                            pos += 1
-                            count -= 1
-                        }
+                controllerFuture?.addListener(
+                    {
+                        it(Result.success(
+                            RestoredData(
+                                isLooping = player?.repeatMode.run {
+                                    return@run this == Player.REPEAT_MODE_ONE
+                                },
+                                isPlaying = player?.isPlaying ?: false,
+                                currentTrack = player?.currentMediaItem?.run {
+                                    return@run trackFromMediaItem(this)
+                                },
+                                progress = player?.currentPosition ?: 0L,
+                                queue = player?.run {
+                                    val ret = mutableListOf<Track>()
+                                    var count = mediaItemCount
+                                    var pos = 0
+                                    if (count == 0) {
+                                        return@run ret
+                                    }
+                                    while (count > 0) {
+                                        ret.add(trackFromMediaItem(getMediaItemAt(pos)))
+                                        pos += 1
+                                        count -= 1
+                                    }
 
-                        return@run ret
-                    } ?: listOf(),
+                                    return@run ret
+                                } ?: listOf(),
+                            ),
+                        ))
+                    },
+                    MoreExecutors.directExecutor(),
                 )
             }
         )
@@ -125,6 +133,24 @@ class MainActivity : FlutterActivity() {
             {
                 player = controllerFuture?.get()?.apply {
 //                    playWhenReady = true
+
+                    val queue = Queue(flutterEngine!!.dartExecutor.binaryMessenger)
+
+                    val mediaItem = currentMediaItem
+
+                    queue.ensureCurrentTrack(
+                        if (mediaItem == null) null else trackFromMediaItem(
+                            mediaItem
+                        )
+                    ) {}
+
+                    if (mediaItemCount == 0) {
+                        queue.ensureQueueClear { }
+                    }
+
+                    if (isPlaying) {
+                        watchPositionUpdates(PlaybackEvents(flutterEngine!!.dartExecutor.binaryMessenger))
+                    }
                 }
                 player?.addListener(
                     PlayerEventsListener(
@@ -273,8 +299,8 @@ fun trackFromMediaItem(mediaItem: MediaItem): Track = Track(
     artist = mediaItem.mediaMetadata.artist?.toString() ?: "",
     album = mediaItem.mediaMetadata.albumTitle?.toString() ?: "",
     albumArtist = mediaItem.mediaMetadata.albumArtist?.toString() ?: "",
-    name = mediaItem.requestMetadata.extras!!.getString("name") ?: "",
-    duration = mediaItem.requestMetadata.extras!!.getLong("duration"),
+    name = mediaItem.mediaMetadata.title?.toString() ?: "",
+    duration = mediaItem.mediaMetadata.durationMs ?: 0L,
     id = mediaItem.requestMetadata.extras!!.getLong("id"),
     albumId = mediaItem.requestMetadata.extras!!.getLong("albumId"),
     dateModified = mediaItem.requestMetadata.extras!!.getLong("dateModified"),

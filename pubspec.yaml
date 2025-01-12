@@ -3,7 +3,6 @@ description: "Music player"
 repository: https://github.com/TheBigLettuce/strawberry
 
 platforms:
-  linux:
   android:
 
 # The following line prevents the package from being accidentally published to
@@ -40,7 +39,7 @@ dependencies:
   flutter:
     sdk: flutter
 
-  flutter_animate: ^4.1.1+1
+  flutter_animate: ^4.5.2
 
   go_router: ^14.3.0
 
@@ -48,6 +47,7 @@ dependencies:
 
   logging: ^1.1.1
   meta: ^1.15.0
+  scrollable_positioned_list: ^0.3.8
   transparent_image: ^2.0.1
 
   # The following adds the Cupertino Icons font to your application.
@@ -75,6 +75,10 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/strawberry_placeholder_dark.png
+    - assets/strawberry_placeholder_light.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

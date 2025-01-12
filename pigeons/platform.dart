@@ -1,3 +1,21 @@
+/* 
+  Strawberry, a music player
+  Copyright (C) 2024  Bob
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
 import "package:pigeon/pigeon.dart";
 
 @ConfigurePigeon(
@@ -83,6 +101,12 @@ class Album {
 @HostApi()
 abstract interface class PlaybackController {
   @async
+  void next();
+
+  @async
+  void prev();
+
+  @async
   void seek(int sec);
 
   @async
@@ -94,11 +118,33 @@ abstract interface class PlaybackController {
   void changeTrack(int id);
 
   @async
+  void setIndex(int index);
+
+  @async
+  void setTracks(List<Track> tracks);
+
+  @async
+  void swapIndexes(int i1, int i2);
+
+  @async
+  void addTrack(int id);
+
+  @async
+  void addTracks(List<Track> tracks);
+
+  @async
+  void removeTrack(int index);
+
+  @async
+  void clearStop();
+
+  @async
   void setLooping(bool looping);
 }
 
 @HostApi()
 abstract interface class DataLoader {
+  @async
   RestoredData restore();
 
   @async
@@ -138,6 +184,9 @@ enum MediaThumbnailType {
 
 @FlutterApi()
 abstract interface class Queue {
+  void ensureQueueClear();
+  void ensureCurrentTrack(Track? track);
+
   Track? byId(int id);
 
   Track? current();

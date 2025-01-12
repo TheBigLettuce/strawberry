@@ -1,10 +1,28 @@
+/*
+  Strawberry, a music player
+  Copyright (C) 2024  Bob
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
 import "dart:io" as io;
 import "dart:ui";
 
 import "package:flutter/foundation.dart";
 import "package:flutter/material.dart";
+import "package:strawberry/main.dart";
 import "package:strawberry/src/platform/platform.dart";
-import "package:transparent_image/transparent_image.dart";
 
 final _thumbLoadingStatus = <int, Future<String>>{};
 
@@ -18,13 +36,14 @@ Future<String> _loadTrackThumb(int id) {
 
 class PlatformThumbnailProvider
     extends ImageProvider<PlatformThumbnailProvider> {
-  const PlatformThumbnailProvider.album(this.id)
+  const PlatformThumbnailProvider.album(this.id, this.brightness)
       : loadThumbnail = _loadAlbumThumb;
   // const PlatformThumbnailProvider.track(this.id)
   //     : loadThumbnail = _loadTrackThumb;
 
   final int id;
 
+  final Brightness brightness;
   final Future<String> Function(int id) loadThumbnail;
 
   @override
@@ -74,7 +93,12 @@ class PlatformThumbnailProvider
 
     final file = await setFile();
     if (file == null) {
-      return decode(await ImmutableBuffer.fromUint8List(kTransparentImage));
+      final image = switch (brightness) {
+        Brightness.dark => placeholder_dark,
+        Brightness.light => placeholder_light,
+      };
+
+      return decode(await ImmutableBuffer.fromUint8List(image));
     }
 
     // copied from Flutter source of FileImage
@@ -95,9 +119,11 @@ class PlatformThumbnailProvider
       return false;
     }
 
-    return other is PlatformThumbnailProvider && other.id == id;
+    return other is PlatformThumbnailProvider &&
+        other.id == id &&
+        other.brightness == brightness;
   }
 
   @override
-  int get hashCode => id.hashCode;
+  int get hashCode => Object.hash(id, brightness);
 }
