@@ -1,0 +1,69 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: Release Android
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Android keystore
+        id: android_keystore
+        uses: timheuer/base64-to-file@v1.0.3
+        with:
+          fileName: upload-keystore.jks
+          encodedString: ${{ secrets.KEYSTORE_BASE64 }}
+
+      - name: Create key.properties
+        run: |
+          echo "storeFile=${{ steps.android_keystore.outputs.filePath }}" > android/key.properties
+          echo "storePassword=${{ secrets.STORE_PASSWORD }}" >> android/key.properties
+          echo "keyPassword=${{ secrets.STORE_PASSWORD }}" >> android/key.properties
+          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/key.properties
+
+      - uses: actions/setup-java@v2
+        with:
+          distribution: "zulu"
+          java-version: "17.x"
+          cache: gradle
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.28.0-0.1.pre"
+          channel: "beta"
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get && flutter gen-l10n && flutter pub run pigeon --input pigeons/platform.dart
+
+      - name: Start release build
+        run: flutter build apk --split-per-abi --split-debug-info=debug_info
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: output
+          path: build/app/outputs/flutter-apk/
+
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          draft: true
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/app/outputs/flutter-apk/*
+          file_glob: true
+          tag: ${{ github.ref }}
+          overwrite: true
+          body: ${{ github.ref }}
