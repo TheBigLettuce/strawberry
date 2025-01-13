@@ -41,6 +41,7 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.github.thebiglettuce.strawberry.generated.DataLoader
 import com.github.thebiglettuce.strawberry.generated.DataNotifications
+import com.github.thebiglettuce.strawberry.generated.LoopingState
 import com.github.thebiglettuce.strawberry.generated.MediaThumbnails
 import com.github.thebiglettuce.strawberry.generated.PlaybackController
 import com.github.thebiglettuce.strawberry.generated.PlaybackEvents
@@ -99,8 +100,13 @@ class MainActivity : FlutterActivity() {
                     {
                         it(Result.success(
                             RestoredData(
-                                isLooping = player?.repeatMode.run {
-                                    return@run this == Player.REPEAT_MODE_ONE
+                                looping = player?.repeatMode.run {
+                                    return@run when (this) {
+                                        Player.REPEAT_MODE_OFF -> LoopingState.OFF
+                                        Player.REPEAT_MODE_ONE -> LoopingState.ONE
+                                        Player.REPEAT_MODE_ALL -> LoopingState.ALL
+                                        else -> LoopingState.OFF
+                                    }
                                 },
                                 isPlaying = player?.isPlaying ?: false,
                                 currentTrack = player?.currentMediaItem?.run {
@@ -122,6 +128,7 @@ class MainActivity : FlutterActivity() {
 
                                     return@run ret
                                 } ?: listOf(),
+                                isShuffling = player?.shuffleModeEnabled ?: false
                             ),
                         ))
                     },
@@ -265,6 +272,12 @@ class PlayerEventsListener(
         Log.e("PlayerEvents.errorChanged", error?.message.toString(), error)
     }
 
+    override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+        super.onShuffleModeEnabledChanged(shuffleModeEnabled)
+
+        events.addShuffle(shuffleModeEnabled) {}
+    }
+
     @OptIn(UnstableApi::class)
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
         super.onMediaItemTransition(mediaItem, reason)
@@ -290,13 +303,16 @@ class PlayerEventsListener(
 
     override fun onRepeatModeChanged(repeatMode: Int) {
         super.onRepeatModeChanged(repeatMode)
-        if (repeatMode == Player.REPEAT_MODE_ALL) {
-            events.addLooping(true) {}
-        } else if (repeatMode == Player.REPEAT_MODE_OFF) {
-            events.addLooping(false) {}
-        }
+        events.addLooping(
+            when (repeatMode) {
+                Player.REPEAT_MODE_OFF -> LoopingState.OFF
+                Player.REPEAT_MODE_ONE -> LoopingState.ONE
+                Player.REPEAT_MODE_ALL -> LoopingState.ALL
+                else -> LoopingState.OFF
+            }
+        ) {}
 
-        Log.i("PlayerEvents.repeatMode", (repeatMode == Player.REPEAT_MODE_ALL).toString())
+        Log.i("PlayerEvents.repeatMode", Player.REPEAT_MODE_ALL.toString())
     }
 
     override fun onPositionDiscontinuity(

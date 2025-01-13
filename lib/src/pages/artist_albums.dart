@@ -18,6 +18,7 @@
 
 import "package:flutter/material.dart";
 import "package:go_router/go_router.dart";
+import "package:strawberry/l10n/generated/app_localizations.dart";
 import "package:strawberry/src/pages/album_tracks.dart";
 import "package:strawberry/src/platform/platform.dart";
 import "package:strawberry/src/platform/platform_thumbnail.dart";
@@ -82,6 +83,7 @@ class __AlbumAndTracksState extends State<_AlbumAndTracks> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final album = widget.data.$1;
 
@@ -165,7 +167,7 @@ class __AlbumAndTracksState extends State<_AlbumAndTracks> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        "${album.numberOfSongs} items",
+                        l10n.items(album.numberOfSongs),
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurface
                               .withValues(alpha: 0.8),
@@ -178,7 +180,7 @@ class __AlbumAndTracksState extends State<_AlbumAndTracks> {
                               QueueList.clearAndPlayOf(context, widget.data.$2);
                             },
                             child: Text(
-                              "Play all",
+                              l10n.playAll,
                               style: theme.textTheme.labelMedium?.copyWith(
                                 color: theme.colorScheme.primary,
                               ),
@@ -190,7 +192,7 @@ class __AlbumAndTracksState extends State<_AlbumAndTracks> {
                               QueueList.addAllOf(context, widget.data.$2);
                             },
                             child: Text(
-                              "Add all",
+                              l10n.addAll,
                               style: theme.textTheme.labelMedium?.copyWith(
                                 color: theme.colorScheme.primary,
                               ),
@@ -199,7 +201,12 @@ class __AlbumAndTracksState extends State<_AlbumAndTracks> {
                         ],
                       ),
                       Text(
-                        "${Duration(milliseconds: widget.data.$2.fold(0, (i, e) => i + e.duration)).inMinutes} minutes",
+                        l10n.minutes(
+                          Duration(
+                            milliseconds: widget.data.$2
+                                .fold(0, (i, e) => i + e.duration),
+                          ).inMinutes,
+                        ),
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurface
                               .withValues(alpha: 0.8),

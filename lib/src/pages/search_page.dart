@@ -20,6 +20,7 @@ import "dart:async";
 
 import "package:flutter/material.dart";
 import "package:go_router/go_router.dart";
+import "package:strawberry/l10n/generated/app_localizations.dart";
 import "package:strawberry/src/pages/album_tracks.dart";
 import "package:strawberry/src/pages/home.dart";
 import "package:strawberry/src/platform/platform.dart";
@@ -50,6 +51,8 @@ class _SearchPageState extends State<SearchPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     return Scaffold(
       appBar: AppBar(
         actionsPadding: EdgeInsets.zero,
@@ -59,7 +62,6 @@ class _SearchPageState extends State<SearchPage> {
           child: SizedBox(
             height: 40,
             child: SearchBar(
-              autoFocus: true,
               focusNode: focusNode,
               onChanged: filteringStream.add,
               onSubmitted: filteringStream.add,
@@ -71,7 +73,7 @@ class _SearchPageState extends State<SearchPage> {
                 },
                 icon: const Icon(Icons.arrow_back),
               ),
-              hintText: "Search for tracks, albums...",
+              hintText: l10n.searchHint,
             ),
           ),
         ),

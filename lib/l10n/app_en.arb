@@ -3,5 +3,81 @@
     "appName": "Strawberry",
     "@appName": {
       "description": "Localized application name"
+    },
+    "minutes": "{duration, plural, =0{zero minutes} =1{1 minute} other{{duration} minutes}}",
+    "@minutes": {
+      "description": "Track(s) duration in minutes",
+      "placeholders": {
+        "duration": {
+          "type": "int"
+        }
+      }
+    },
+    "items": "{count, plural, =0{no items} =1{1 item} other{{count} items}}",
+    "@items": {
+      "description": "Item count",
+      "placeholders": {
+        "count": {
+          "type": "int"
+        }
+      }
+    },
+    "addAll": "Add all",
+    "@addAll": {
+      "description": "Add tracks to queue"
+    },
+    "playAll": "Play all",
+    "@playAll": {
+      "description": "Add tracks to queue and play"
+    },
+    "searchHint": "Search for tracks, albums...",
+    "@searchHint": {
+      "description": "Search bar hint"
+    },
+    "albumsLabel": "Albums",
+    "@albumsLabel": {
+      "description": "Albums tab label"
+    },
+    "tracksLabel": "Tracks",
+    "@tracksLabel": {
+      "description": "Tracks tab label"
+    },
+    "artistsLabel": "Artists",
+    "@artistsLabel": {
+      "description": "Artists tab label"
+    },
+    "albums": "{count, plural, =0{no albums} =1{1 album} other{{count} albums}}",
+    "@albums": {
+      "description": "Album count",
+      "placeholders": {
+        "count": {
+          "type": "int"
+        }
+      }
+    },
+    "tracks": "{count, plural, =0{no tracks} =1{1 track} other{{count} tracks}}",
+    "@tracks": {
+      "description": "Track count",
+      "placeholders": {
+        "count": {
+          "type": "int"
+        }
+      }
+    },
+    "noAlbums": "No albums...",
+    "@noAlbums": {
+      "description": "Empty widget label"
+    },
+    "noTracks": "No albums...",
+    "@noTracks": {
+      "description": "Empty widget label"
+    },
+    "noArtists": "No artists...",
+    "@noArtists": {
+      "description": "Empty widget label"
+    },
+    "empty": "Empty",
+    "@empty": {
+      "description": "Empty value"
     }
 }

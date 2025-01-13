@@ -36,6 +36,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import com.github.thebiglettuce.strawberry.generated.DataLoader
 import com.github.thebiglettuce.strawberry.generated.DataNotifications
+import com.github.thebiglettuce.strawberry.generated.LoopingState
 import com.github.thebiglettuce.strawberry.generated.MediaThumbnailType
 import com.github.thebiglettuce.strawberry.generated.MediaThumbnails
 import com.github.thebiglettuce.strawberry.generated.PlaybackController
@@ -240,13 +241,24 @@ class PlaybackControllerImpl(
             stop()
             clearMediaItems()
         }
+
+        callback(Result.success(Unit))
     }
 
-    override fun setLooping(looping: Boolean, callback: (Result<Unit>) -> Unit) {
-        if (looping) {
-            player()?.repeatMode = Player.REPEAT_MODE_ALL
-        } else {
-            player()?.repeatMode = Player.REPEAT_MODE_OFF
+
+    override fun setShuffle(shuffle: Boolean, callback: (Result<Unit>) -> Unit) {
+        player()?.apply {
+            this.shuffleModeEnabled = shuffle
+        }
+
+        callback(Result.success(Unit))
+    }
+
+    override fun setLooping(looping: LoopingState, callback: (Result<Unit>) -> Unit) {
+        player()?.repeatMode = when (looping) {
+            LoopingState.OFF -> Player.REPEAT_MODE_OFF
+            LoopingState.ONE -> Player.REPEAT_MODE_ONE
+            LoopingState.ALL -> Player.REPEAT_MODE_ALL
         }
 
         callback(Result.success(Unit))

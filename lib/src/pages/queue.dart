@@ -17,7 +17,9 @@
 */
 
 import "package:flutter/material.dart";
+import "package:flutter_animate/flutter_animate.dart";
 import "package:go_router/go_router.dart";
+import "package:strawberry/l10n/generated/app_localizations.dart";
 import "package:strawberry/src/platform/platform.dart";
 import "package:strawberry/src/platform/platform_thumbnail.dart";
 
@@ -37,18 +39,19 @@ class QueueModalPage extends StatefulWidget {
 class _QueueModalPageState extends State<QueueModalPage> {
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final queue = QueueList.of(context);
 
     if (queue.isEmpty) {
       return Center(
         child: Text(
-          "Empty",
+          l10n.empty,
           style: theme.textTheme.headlineMedium?.copyWith(
             color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
           ),
         ),
-      );
+      ).animate().fadeIn();
     }
 
     return Column(
@@ -58,6 +61,19 @@ class _QueueModalPageState extends State<QueueModalPage> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
+              Builder(
+                builder: (context) {
+                  final shuffle = PlayerStateQuery.isShuffleOf(context);
+
+                  return IconButton(
+                    onPressed: () {
+                      Player.of(context).flipIsShuffling(context);
+                    },
+                    isSelected: shuffle,
+                    icon: const Icon(Icons.shuffle),
+                  );
+                },
+              ),
               IconButton(
                 onPressed: () {
                   queue.clearStop();
@@ -73,11 +89,15 @@ class _QueueModalPageState extends State<QueueModalPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                "${queue.length} items",
+                l10n.items(queue.length),
                 style: theme.textTheme.bodyMedium,
               ),
               Text(
-                "${Duration(milliseconds: queue.fold(0, (i, e) => i + e.duration)).inMinutes} minutes",
+                l10n.minutes(
+                  Duration(
+                    milliseconds: queue.fold(0, (i, e) => i + e.duration),
+                  ).inMinutes,
+                ),
                 style: theme.textTheme.bodyMedium,
               ),
             ],
@@ -121,6 +141,11 @@ class _QueueModalPageState extends State<QueueModalPage> {
                 ),
               );
             },
+          ),
+        ),
+        Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewPaddingOf(context).bottom,
           ),
         ),
       ],

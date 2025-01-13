@@ -50,3 +50,4 @@ untranslated_strings.txt
 
 # Generated files
 /lib/src/**/*.g.dart
+/lib/l10n/generated/*.dart

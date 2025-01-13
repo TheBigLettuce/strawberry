@@ -38,17 +38,20 @@ class _PigeonCodec extends StandardMessageCodec {
     }    else if (value is MediaThumbnailType) {
       buffer.putUint8(129);
       writeValue(buffer, value.index);
-    }    else if (value is Artist) {
+    }    else if (value is LoopingState) {
       buffer.putUint8(130);
-      writeValue(buffer, value.encode());
-    }    else if (value is Track) {
+      writeValue(buffer, value.index);
+    }    else if (value is Artist) {
       buffer.putUint8(131);
       writeValue(buffer, value.encode());
-    }    else if (value is Album) {
+    }    else if (value is Track) {
       buffer.putUint8(132);
       writeValue(buffer, value.encode());
-    }    else if (value is RestoredData) {
+    }    else if (value is Album) {
       buffer.putUint8(133);
+      writeValue(buffer, value.encode());
+    }    else if (value is RestoredData) {
+      buffer.putUint8(134);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -62,12 +65,15 @@ class _PigeonCodec extends StandardMessageCodec {
         final int? value = readValue(buffer) as int?;
         return value == null ? null : MediaThumbnailType.values[value];
       case 130: 
-        return Artist.decode(readValue(buffer)!);
+        final int? value = readValue(buffer) as int?;
+        return value == null ? null : LoopingState.values[value];
       case 131: 
-        return Track.decode(readValue(buffer)!);
+        return Artist.decode(readValue(buffer)!);
       case 132: 
-        return Album.decode(readValue(buffer)!);
+        return Track.decode(readValue(buffer)!);
       case 133: 
+        return Album.decode(readValue(buffer)!);
+      case 134: 
         return RestoredData.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);

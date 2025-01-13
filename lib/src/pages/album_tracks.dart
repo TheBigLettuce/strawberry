@@ -18,6 +18,7 @@
 
 import "package:flutter/material.dart";
 import "package:go_router/go_router.dart";
+import "package:strawberry/l10n/generated/app_localizations.dart";
 import "package:strawberry/src/pages/queue.dart";
 import "package:strawberry/src/platform/platform.dart";
 import "package:strawberry/src/platform/platform_thumbnail.dart";
@@ -47,6 +48,7 @@ class AlbumTracksPage extends StatefulWidget {
 class _AlbumTracksPageState extends State<AlbumTracksPage> {
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final tracks = LiveTracksBucket.of(context);
     if (tracks.isEmpty) {
@@ -92,7 +94,7 @@ class _AlbumTracksPageState extends State<AlbumTracksPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                "${tracks.length} items",
+                l10n.items(tracks.length),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
                 ),
@@ -104,7 +106,7 @@ class _AlbumTracksPageState extends State<AlbumTracksPage> {
                       QueueList.clearAndPlayOf(context, tracks.toList());
                     },
                     child: Text(
-                      "Play all",
+                      l10n.playAll,
                       style: theme.textTheme.labelMedium?.copyWith(
                         color: theme.colorScheme.primary,
                       ),
@@ -116,7 +118,7 @@ class _AlbumTracksPageState extends State<AlbumTracksPage> {
                       QueueList.addAllOf(context, tracks.toList());
                     },
                     child: Text(
-                      "Add all",
+                      l10n.addAll,
                       style: theme.textTheme.labelMedium?.copyWith(
                         color: theme.colorScheme.primary,
                       ),
@@ -125,7 +127,11 @@ class _AlbumTracksPageState extends State<AlbumTracksPage> {
                 ],
               ),
               Text(
-                "${Duration(milliseconds: tracks.fold(0, (i, e) => i + e.duration)).inMinutes} minutes",
+                l10n.minutes(
+                  Duration(
+                    milliseconds: tracks.fold(0, (i, e) => i + e.duration),
+                  ).inMinutes,
+                ),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
                 ),
@@ -139,9 +145,7 @@ class _AlbumTracksPageState extends State<AlbumTracksPage> {
             itemBuilder: (context, index) {
               final track = tracks[index];
 
-              return TrackTile(
-                track: track,
-              );
+              return TrackTile(track: track);
             },
           ),
         ),
@@ -169,11 +173,12 @@ class TrackTile extends StatelessWidget {
     final seconds = microseconds ~/ Duration.microsecondsPerSecond;
     microseconds = microseconds.remainder(Duration.microsecondsPerSecond);
 
-    return "$minutes:$seconds";
+    return "$minutes:${seconds < 10 ? "0" : ""}$seconds";
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final queue = QueueList.of(context);
     final inQueue = queue.containsTrack(track);
     final isCurrent = queue.currentTrack?.id == track.id;
@@ -213,7 +218,7 @@ class TrackTile extends StatelessWidget {
           leading: CircleAvatar(
             foregroundImage: PlatformThumbnailProvider.album(
               track.albumId,
-              Theme.of(context).brightness,
+              theme.brightness,
             ),
           ),
           title: Text(track.name),
@@ -221,10 +226,12 @@ class TrackTile extends StatelessWidget {
             "${track.track} · ${formatDuration(track.duration)}",
           ),
         ),
-        if (isCurrent)
-          TrackPlaybackProgress(track: track)
-        else
-          const SizedBox(height: 2),
+        DecoratedBox(
+          decoration: BoxDecoration(color: overrideColor),
+          child: isCurrent
+              ? TrackPlaybackProgress(track: track)
+              : const SizedBox(height: 2, width: double.infinity),
+        ),
       ],
     );
   }

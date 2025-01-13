@@ -139,7 +139,10 @@ abstract interface class PlaybackController {
   void clearStop();
 
   @async
-  void setLooping(bool looping);
+  void setLooping(LoopingState looping);
+
+  @async
+  void setShuffle(bool shuffle);
 }
 
 @HostApi()
@@ -157,15 +160,17 @@ abstract interface class DataLoader {
 
 class RestoredData {
   const RestoredData({
-    required this.isLooping,
+    required this.looping,
     required this.isPlaying,
+    required this.isShuffling,
     required this.progress,
     required this.currentTrack,
     required this.queue,
   });
 
-  final bool isLooping;
+  final LoopingState looping;
   final bool isPlaying;
+  final bool isShuffling;
   final int progress;
   final Track? currentTrack;
   final List<Track> queue;
@@ -208,6 +213,13 @@ abstract interface class DataNotifications {
 abstract interface class PlaybackEvents {
   void addPlaying(bool playing);
   void addSeek(int duration);
-  void addLooping(bool looping);
+  void addLooping(LoopingState looping);
   void addTrackChange(Track? track);
+  void addShuffle(bool shuffle);
+}
+
+enum LoopingState {
+  off,
+  one,
+  all;
 }

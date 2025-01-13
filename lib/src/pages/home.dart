@@ -22,6 +22,7 @@ import "dart:ui";
 import "package:flutter/material.dart";
 import "package:flutter/services.dart";
 import "package:flutter_animate/flutter_animate.dart";
+import "package:strawberry/l10n/generated/app_localizations.dart";
 import "package:strawberry/src/pages/album_tracks.dart";
 import "package:strawberry/src/pages/artist_albums.dart";
 import "package:strawberry/src/pages/queue.dart";
@@ -69,6 +70,7 @@ class _HomePageState extends State<HomePage>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -88,24 +90,24 @@ class _HomePageState extends State<HomePage>
               sliver: SliverAppBar(
                 pinned: true,
                 floating: true,
-                leading: const IconButton(
-                  onPressed: null,
-                  icon: Icon(Icons.settings_outlined),
+                leading: IconButton(
+                  onPressed: () => showLicensePage(context: context),
+                  icon: const Icon(Icons.settings_outlined),
                 ),
                 clipBehavior: Clip.antiAlias,
                 title: GestureDetector(
                   onTap: () {
                     SearchPage.go(context);
                   },
-                  child: const AbsorbPointer(
+                  child: AbsorbPointer(
                     child: Hero(
                       tag: "SearchAnchor",
                       child: SizedBox(
                         height: 40,
                         child: SearchBar(
-                          elevation: WidgetStatePropertyAll(0),
-                          leading: Icon(Icons.search_outlined),
-                          hintText: "Search for tracks, albums...",
+                          elevation: const WidgetStatePropertyAll(0),
+                          leading: const Icon(Icons.search_outlined),
+                          hintText: l10n.searchHint,
                         ),
                       ),
                     ),
@@ -137,18 +139,18 @@ class _HomePageState extends State<HomePage>
                   indicator: !innerBoxIsScrolled ? null : const BoxDecoration(),
                   indicatorSize: TabBarIndicatorSize.tab,
                   controller: tabController,
-                  tabs: const [
+                  tabs: [
                     Tab(
-                      text: "Albums",
-                      icon: Icon(Icons.album_outlined),
+                      text: l10n.albumsLabel,
+                      icon: const Icon(Icons.album_outlined),
                     ),
                     Tab(
-                      text: "Tracks",
-                      icon: Icon(Icons.library_music_outlined),
+                      text: l10n.tracksLabel,
+                      icon: const Icon(Icons.library_music_outlined),
                     ),
                     Tab(
-                      text: "Artists",
-                      icon: Icon(Icons.people_outline_outlined),
+                      text: l10n.artistsLabel,
+                      icon: const Icon(Icons.people_outline_outlined),
                     ),
                   ],
                 ),
@@ -341,8 +343,15 @@ class _BottomBarState extends State<BottomBar> {
                                   onPressed: () {
                                     player.flipIsLooping(context);
                                   },
-                                  isSelected: isLooping,
-                                  icon: const Icon(Icons.loop_outlined),
+                                  isSelected: isLooping != LoopingState.off,
+                                  icon: switch (isLooping) {
+                                    LoopingState.off =>
+                                      const Icon(Icons.repeat_rounded),
+                                    LoopingState.one =>
+                                      const Icon(Icons.repeat_one_on_outlined),
+                                    LoopingState.all =>
+                                      const Icon(Icons.repeat_on_outlined),
+                                  },
                                 );
                               },
                             ),
@@ -517,84 +526,132 @@ class ArtistsTabBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     final artists = ArtistsBucket.of(context);
+    if (artists.isEmpty) {
+      return EmptyWidget(title: l10n.noArtists);
+    }
 
-    return CustomScrollView(
-      key: const PageStorageKey("Artists"),
-      slivers: [
-        SliverOverlapInjector(
-          handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
-            context,
+    return Scrollbar(
+      interactive: true,
+      child: CustomScrollView(
+        key: const PageStorageKey("Artists"),
+        slivers: [
+          SliverOverlapInjector(
+            handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
+              context,
+            ),
           ),
-        ),
-        SliverList.builder(
-          itemCount: artists.length,
-          itemBuilder: (context, index) {
-            final artist = artists[index];
+          SliverList.builder(
+            itemCount: artists.length,
+            itemBuilder: (context, index) {
+              final artist = artists[index];
 
-            return ListTile(
-              title: Text(artist.artist),
-              subtitle: Text(
-                "${artist.numberOfAlbums} albums · ${artist.numberOfTracks} tracks",
-              ),
-              onTap: () => ArtistAlbumsPage.go(context, artist.id),
-            );
-          },
-        ),
-        const _BottomBarPadding(),
-      ],
+              return ListTile(
+                title: Text(artist.artist),
+                subtitle: Text(
+                  "${l10n.albums(artist.numberOfAlbums)} · ${l10n.tracks(artist.numberOfTracks)}",
+                ),
+                onTap: () => ArtistAlbumsPage.go(context, artist.id),
+              );
+            },
+          ),
+          const _BottomBarPadding(),
+        ],
+      ),
+    );
+  }
+}
+
+class EmptyWidget extends StatelessWidget {
+  const EmptyWidget({
+    super.key,
+    required this.title,
+  });
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            "🍓",
+            style: theme.textTheme.displayLarge,
+          ),
+          const Padding(padding: EdgeInsets.only(bottom: 8)),
+          Text(
+            title,
+            style: theme.textTheme.titleLarge,
+          ),
+        ],
+      ),
     );
   }
 }
 
 class TracksTabBody extends StatelessWidget {
-  const TracksTabBody({super.key});
+  const TracksTabBody({
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final tracks = TracksBucket.of(context);
+    if (tracks.isEmpty) {
+      return EmptyWidget(title: l10n.noTracks);
+    }
 
-    return CustomScrollView(
-      key: const PageStorageKey("Tracks"),
-      slivers: [
-        SliverOverlapInjector(
-          handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
-            context,
+    return Scrollbar(
+      interactive: true,
+      child: CustomScrollView(
+        key: const PageStorageKey("Tracks"),
+        slivers: [
+          SliverOverlapInjector(
+            handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
+              context,
+            ),
           ),
-        ),
-        SliverList.builder(
-          itemCount: tracks.length,
-          itemBuilder: (context, index) {
-            final queue = QueueList.of(context);
+          SliverList.builder(
+            itemCount: tracks.length,
+            itemBuilder: (context, index) {
+              final queue = QueueList.of(context);
 
-            final track = tracks[index];
-            final isCurrent = queue.currentTrack?.id == track.id;
+              final track = tracks[index];
+              final isCurrent = queue.currentTrack?.id == track.id;
 
-            return Column(
-              children: [
-                ListTile(
-                  trailing: CircleAvatar(
-                    foregroundImage: PlatformThumbnailProvider.album(
-                      track.albumId,
-                      Theme.of(context).brightness,
+              return Column(
+                children: [
+                  ListTile(
+                    trailing: CircleAvatar(
+                      foregroundImage: PlatformThumbnailProvider.album(
+                        track.albumId,
+                        Theme.of(context).brightness,
+                      ),
                     ),
+                    title: Text(track.name),
+                    subtitle: Text("${track.artist} · ${track.album}"),
+                    onTap: () {
+                      QueueList.addOf(context, track);
+                    },
                   ),
-                  title: Text(track.name),
-                  subtitle: Text("${track.artist} · ${track.album}"),
-                  onTap: () {
-                    QueueList.addOf(context, track);
-                  },
-                ),
-                if (isCurrent)
-                  TrackPlaybackProgress(track: track)
-                else
-                  const SizedBox(height: 2),
-              ],
-            );
-          },
-        ),
-        const _BottomBarPadding(),
-      ],
+                  if (isCurrent)
+                    TrackPlaybackProgress(track: track)
+                  else
+                    const SizedBox(height: 2),
+                ],
+              );
+            },
+          ),
+          const _BottomBarPadding(),
+        ],
+      ),
     );
   }
 }
@@ -604,38 +661,45 @@ class AlbumsTabBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final albums = AlbumsBucket.of(context);
+    if (albums.isEmpty) {
+      return EmptyWidget(title: l10n.noAlbums);
+    }
 
     return Padding(
       padding: EdgeInsets.zero,
-      child: CustomScrollView(
-        key: const PageStorageKey("Albums"),
-        slivers: [
-          SliverOverlapInjector(
-            handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
-              context,
-            ),
-            // sliver:,
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            sliver: SliverGrid.builder(
-              // padding: EdgeInsets.symmetric(
-              //     vertical: 8, horizontal: 12),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                childAspectRatio: 0.7,
+      child: Scrollbar(
+        interactive: true,
+        child: CustomScrollView(
+          key: const PageStorageKey("Albums"),
+          slivers: [
+            SliverOverlapInjector(
+              handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
+                context,
               ),
-              itemCount: albums.length,
-              itemBuilder: (context, index) {
-                final album = albums[index];
-
-                return AlbumCard(album: album);
-              },
+              // sliver:,
             ),
-          ),
-          const _BottomBarPadding(),
-        ],
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              sliver: SliverGrid.builder(
+                // padding: EdgeInsets.symmetric(
+                //     vertical: 8, horizontal: 12),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  childAspectRatio: 0.7,
+                ),
+                itemCount: albums.length,
+                itemBuilder: (context, index) {
+                  final album = albums[index];
+
+                  return AlbumCard(album: album);
+                },
+              ),
+            ),
+            const _BottomBarPadding(),
+          ],
+        ),
       ),
     );
   }

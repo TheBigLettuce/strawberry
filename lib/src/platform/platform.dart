@@ -28,6 +28,7 @@ export "package:strawberry/src/platform/generated/platform_api.g.dart"
         Album,
         Artist,
         DataNotifications,
+        LoopingState,
         MediaThumbnailType,
         MediaThumbnails,
         PlaybackEvents,
@@ -536,8 +537,6 @@ abstract class _StorageBucket<T> extends StorageBucket<T> {
   void put(List<T> elements) {
     storage.addAll(elements);
     _events.add(storage.length);
-
-    // print(elements);
   }
 
   @override
@@ -866,9 +865,20 @@ extension PlayerStatePlaybackExt on Player {
     }
   }
 
+  void flipIsShuffling(BuildContext context) {
+    final isShuffling = PlayerStateQuery.isShuffleOf(context);
+    _controller.setShuffle(!isShuffling);
+  }
+
   void flipIsLooping(BuildContext context) {
     final isLooping = PlayerStateQuery.loopingOf(context);
-    _controller.setLooping(!isLooping);
+    _controller.setLooping(
+      switch (isLooping) {
+        platform.LoopingState.off => platform.LoopingState.one,
+        platform.LoopingState.one => platform.LoopingState.all,
+        platform.LoopingState.all => platform.LoopingState.off,
+      },
+    );
   }
 
   void changeOrPlay(BuildContext context, platform.Track track, int idx) {
@@ -897,15 +907,17 @@ abstract interface class Player {
 
 class PlayerStateQuery extends InheritedModel<_PlayerStateQueryAspect> {
   const PlayerStateQuery({
+    required this.isShuffling,
     required this.looping,
     required this.progress,
     required this.isPlaying,
     required super.child,
   });
 
-  final bool looping;
+  final platform.LoopingState looping;
   final Duration progress;
   final bool isPlaying;
+  final bool isShuffling;
 
   static Duration progressOf(BuildContext context) {
     final widget = InheritedModel.inheritFrom<PlayerStateQuery>(
@@ -916,7 +928,7 @@ class PlayerStateQuery extends InheritedModel<_PlayerStateQueryAspect> {
     return widget!.progress;
   }
 
-  static bool loopingOf(BuildContext context) {
+  static platform.LoopingState loopingOf(BuildContext context) {
     final widget = InheritedModel.inheritFrom<PlayerStateQuery>(
       context,
       aspect: _PlayerStateQueryAspect.looping,
@@ -934,11 +946,21 @@ class PlayerStateQuery extends InheritedModel<_PlayerStateQueryAspect> {
     return widget!.isPlaying;
   }
 
+  static bool isShuffleOf(BuildContext context) {
+    final widget = InheritedModel.inheritFrom<PlayerStateQuery>(
+      context,
+      aspect: _PlayerStateQueryAspect.shuffle,
+    );
+
+    return widget!.isShuffling;
+  }
+
   @override
   bool updateShouldNotify(PlayerStateQuery oldWidget) {
     return looping != oldWidget.looping ||
         progress != oldWidget.progress ||
-        isPlaying != oldWidget.isPlaying;
+        isPlaying != oldWidget.isPlaying ||
+        isShuffling != oldWidget.isShuffling;
   }
 
   @override
@@ -951,13 +973,16 @@ class PlayerStateQuery extends InheritedModel<_PlayerStateQueryAspect> {
         (progress != oldWidget.progress &&
             dependencies.contains(_PlayerStateQueryAspect.progress)) ||
         (isPlaying != oldWidget.isPlaying &&
-            dependencies.contains(_PlayerStateQueryAspect.playback));
+            dependencies.contains(_PlayerStateQueryAspect.playback)) ||
+        (isShuffling != oldWidget.isShuffling &&
+            dependencies.contains(_PlayerStateQueryAspect.shuffle));
   }
 }
 
 enum _PlayerStateQueryAspect {
   playback,
   progress,
+  shuffle,
   looping;
 }
 
@@ -981,8 +1006,9 @@ class __PlayerStateHolderState extends State<_PlayerStateHolder> {
   late final StreamSubscription<PlaybackEvent> events;
 
   bool isPlaying = false;
-  bool isLooping = false;
+  platform.LoopingState looping = platform.LoopingState.off;
   Duration progress = Duration.zero;
+  bool shuffleEnabled = false;
 
   @override
   void initState() {
@@ -990,18 +1016,20 @@ class __PlayerStateHolderState extends State<_PlayerStateHolder> {
 
     if (widget.restoredData != null) {
       isPlaying = widget.restoredData!.isPlaying;
-      isLooping = widget.restoredData!.isLooping;
+      looping = widget.restoredData!.looping;
       progress = Duration(milliseconds: widget.restoredData!.progress);
     }
 
     events = widget.stream.listen((e) {
       switch (e) {
         case Looping():
-          isLooping = e.looping;
+          looping = e.looping;
         case Seek():
           progress = Duration(milliseconds: e.duration);
         case Playing():
           isPlaying = e.playing;
+        case Shuffle():
+          shuffleEnabled = e.shuffle;
         case TrackChange():
           return;
       }
@@ -1022,7 +1050,8 @@ class __PlayerStateHolderState extends State<_PlayerStateHolder> {
     return PlayerStateQuery(
       isPlaying: isPlaying,
       progress: progress,
-      looping: isLooping,
+      isShuffling: shuffleEnabled,
+      looping: looping,
       child: widget.child,
     );
   }
@@ -1103,7 +1132,13 @@ sealed class PlaybackEvent {
 class Looping implements PlaybackEvent {
   const Looping(this.looping);
 
-  final bool looping;
+  final platform.LoopingState looping;
+}
+
+class Shuffle implements PlaybackEvent {
+  const Shuffle(this.shuffle);
+
+  final bool shuffle;
 }
 
 class Seek implements PlaybackEvent {
@@ -1388,7 +1423,7 @@ class PlaybackEventsImpl implements platform.PlaybackEvents, Player {
   }
 
   @override
-  void addLooping(bool looping) {
+  void addLooping(platform.LoopingState looping) {
     _events.add(Looping(looping));
   }
 
@@ -1400,6 +1435,11 @@ class PlaybackEventsImpl implements platform.PlaybackEvents, Player {
   @override
   void addSeek(int duration) {
     _events.add(Seek(duration));
+  }
+
+  @override
+  void addShuffle(bool shuffle) {
+    _events.add(Shuffle(shuffle));
   }
 
   @override

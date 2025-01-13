@@ -18,8 +18,9 @@
 
 import "package:flutter/material.dart";
 import "package:flutter/services.dart";
-import "package:flutter_gen/gen_l10n/app_localizations.dart";
 import "package:go_router/go_router.dart";
+import "package:permission_handler/permission_handler.dart";
+import "package:strawberry/l10n/generated/app_localizations.dart";
 import "package:strawberry/src/pages/album_tracks.dart";
 import "package:strawberry/src/pages/artist_albums.dart";
 import "package:strawberry/src/pages/home.dart";
@@ -42,9 +43,12 @@ Future<void> main() async {
   final restoredData = await DataLoader().restore();
   stateManager.restore(restoredData);
 
-  stateManager.playerManager.data.notifyAlbums();
-  stateManager.playerManager.data.notifyArtists();
-  stateManager.playerManager.data.notifyTracks();
+  final refresh = await _requestPermissions();
+  if (refresh) {
+    stateManager.playerManager.data.notifyAlbums();
+    stateManager.playerManager.data.notifyArtists();
+    stateManager.playerManager.data.notifyTracks();
+  }
 
   placeholder_light = Uint8List.sublistView(
     await rootBundle.load("assets/strawberry_placeholder_light.png"),
@@ -148,6 +152,20 @@ Future<void> main() async {
       ),
     ),
   );
+}
+
+Future<bool> _requestPermissions() async {
+  final audio = await Permission.audio.status;
+  if (!audio.isGranted) {
+    final resp = await Permission.audio.request();
+    if (!resp.isGranted) {
+      return false;
+    }
+  }
+  await Permission.photos.request();
+  await Permission.notification.request();
+
+  return true;
 }
 
 class BottomSheetPage<T> extends Page<T> {
