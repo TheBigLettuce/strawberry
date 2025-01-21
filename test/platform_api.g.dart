@@ -53,6 +53,9 @@ class _PigeonCodec extends StandardMessageCodec {
     }    else if (value is RestoredData) {
       buffer.putUint8(134);
       writeValue(buffer, value.encode());
+    }    else if (value is AllEvents) {
+      buffer.putUint8(135);
+      writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
     }
@@ -75,6 +78,8 @@ class _PigeonCodec extends StandardMessageCodec {
         return Album.decode(readValue(buffer)!);
       case 134: 
         return RestoredData.decode(readValue(buffer)!);
+      case 135: 
+        return AllEvents.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
     }

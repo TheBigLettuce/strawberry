@@ -28,12 +28,16 @@ class ArtistAlbumsPage extends StatefulWidget {
     super.key,
   });
 
-  static void go(BuildContext context, int artistId) {
+  static void go(BuildContext context, int artistId, [bool push = false]) {
     final albums = AlbumsBucket.queryArtistIdOf(context, artistId);
     final result = TracksBucket.queryAlbumsOf(context, albums.toList());
     albums.dispose();
 
-    context.goNamed("ArtistAlbums", extra: result);
+    if (push) {
+      context.pushNamed("ArtistAlbums", extra: result);
+    } else {
+      context.goNamed("ArtistAlbums", extra: result);
+    }
   }
 
   @override

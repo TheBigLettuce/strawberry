@@ -22,6 +22,7 @@ import "package:flutter/material.dart";
 import "package:go_router/go_router.dart";
 import "package:strawberry/l10n/generated/app_localizations.dart";
 import "package:strawberry/src/pages/album_tracks.dart";
+import "package:strawberry/src/pages/artist_albums.dart";
 import "package:strawberry/src/pages/home.dart";
 import "package:strawberry/src/platform/platform.dart";
 
@@ -100,6 +101,10 @@ class __SearchPageBodyState extends State<_SearchPageBody> {
   Widget build(BuildContext context) {
     return CustomScrollView(
       slivers: [
+        _ArtistsBody(
+          filteringEvents: widget.filteringStream.stream,
+        ),
+        const SliverPadding(padding: EdgeInsets.only(bottom: 8)),
         _AlbumsBody(
           filteringEvents: widget.filteringStream.stream,
         ),
@@ -311,6 +316,142 @@ class TracksContent extends StatelessWidget {
 
         return TrackTile(track: track);
       },
+    );
+  }
+}
+
+class _ArtistsBody extends StatefulWidget {
+  const _ArtistsBody({
+    super.key,
+    required this.filteringEvents,
+  });
+
+  final Stream<String> filteringEvents;
+
+  @override
+  State<_ArtistsBody> createState() => __ArtistsBodyState();
+}
+
+class __ArtistsBodyState extends State<_ArtistsBody> {
+  late final StreamSubscription<String> events;
+  LiveArtistsBucket? resultBucket;
+
+  String filteringEvents = "";
+
+  late ArtistsBucket bucket;
+
+  @override
+  void initState() {
+    super.initState();
+
+    events = widget.filteringEvents.listen((str) {
+      setState(() {
+        if (str.isEmpty) {
+          filteringEvents = "";
+          resultBucket?.dispose();
+          resultBucket = null;
+
+          return;
+        } else if (str == filteringEvents) {
+          return;
+        }
+
+        resultBucket?.dispose();
+        resultBucket = bucket.query(str);
+        filteringEvents = str;
+      });
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    bucket = ArtistsBucket.of(context);
+  }
+
+  @override
+  void dispose() {
+    events.cancel();
+    resultBucket?.dispose();
+
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (resultBucket == null) {
+      return const SliverPadding(padding: EdgeInsets.zero);
+    }
+
+    return resultBucket!.inject(
+      const ArtistsContent(),
+    );
+  }
+}
+
+class ArtistsContent extends StatelessWidget {
+  const ArtistsContent({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final artistsBucket = LiveArtistsBucket.of(context);
+
+    return SliverToBoxAdapter(
+      child: SizedBox(
+        height: 56,
+        width: double.infinity,
+        child: ListView.builder(
+          padding: EdgeInsets.symmetric(horizontal: 12),
+          scrollDirection: Axis.horizontal,
+          itemCount: artistsBucket.length,
+          itemBuilder: (context, index) {
+            final artist = artistsBucket[index];
+
+            return Padding(
+              padding: EdgeInsets.only(
+                right: index == artistsBucket.length - 1 ? 0 : 8,
+              ),
+              child: SizedBox(
+                width: 180,
+                child: ArtistSearchTile(artist: artist),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class ArtistSearchTile extends StatelessWidget {
+  const ArtistSearchTile({
+    super.key,
+    required this.artist,
+  });
+
+  final Artist artist;
+
+  @override
+  Widget build(BuildContext context) {
+    // final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+
+    return ListTile(
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(8)),
+      ),
+      tileColor: theme.colorScheme.surfaceContainerHigh,
+      // leading: ArtistCircle(artist: artist),
+      title: Text(
+        artist.artist,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      // subtitle: Text(
+      //   "${l10n.albums(artist.numberOfAlbums)} · ${l10n.tracks(artist.numberOfTracks)}",
+      // ),
+      onTap: () => ArtistAlbumsPage.go(context, artist.id, true),
     );
   }
 }

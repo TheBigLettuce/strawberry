@@ -39,6 +39,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import com.github.thebiglettuce.strawberry.generated.AllEvents
 import com.github.thebiglettuce.strawberry.generated.DataLoader
 import com.github.thebiglettuce.strawberry.generated.DataNotifications
 import com.github.thebiglettuce.strawberry.generated.LoopingState
@@ -98,39 +99,40 @@ class MainActivity : FlutterActivity() {
             ) {
                 controllerFuture?.addListener(
                     {
-                        it(Result.success(
-                            RestoredData(
-                                looping = player?.repeatMode.run {
-                                    return@run when (this) {
-                                        Player.REPEAT_MODE_OFF -> LoopingState.OFF
-                                        Player.REPEAT_MODE_ONE -> LoopingState.ONE
-                                        Player.REPEAT_MODE_ALL -> LoopingState.ALL
-                                        else -> LoopingState.OFF
-                                    }
-                                },
-                                isPlaying = player?.isPlaying ?: false,
-                                currentTrack = player?.currentMediaItem?.run {
-                                    return@run trackFromMediaItem(this)
-                                },
-                                progress = player?.currentPosition ?: 0L,
-                                queue = player?.run {
-                                    val ret = mutableListOf<Track>()
-                                    var count = mediaItemCount
-                                    var pos = 0
-                                    if (count == 0) {
-                                        return@run ret
-                                    }
-                                    while (count > 0) {
-                                        ret.add(trackFromMediaItem(getMediaItemAt(pos)))
-                                        pos += 1
-                                        count -= 1
-                                    }
+                        it(
+                            Result.success(
+                                RestoredData(
+                                    looping = player?.repeatMode.run {
+                                        return@run when (this) {
+                                            Player.REPEAT_MODE_OFF -> LoopingState.OFF
+                                            Player.REPEAT_MODE_ONE -> LoopingState.ONE
+                                            Player.REPEAT_MODE_ALL -> LoopingState.ALL
+                                            else -> LoopingState.OFF
+                                        }
+                                    },
+                                    isPlaying = player?.isPlaying ?: false,
+                                    currentTrack = player?.currentMediaItem?.run {
+                                        return@run trackFromMediaItem(this)
+                                    },
+                                    progress = player?.currentPosition ?: 0L,
+                                    queue = player?.run {
+                                        val ret = mutableListOf<Track>()
+                                        var count = mediaItemCount
+                                        var pos = 0
+                                        if (count == 0) {
+                                            return@run ret
+                                        }
+                                        while (count > 0) {
+                                            ret.add(trackFromMediaItem(getMediaItemAt(pos)))
+                                            pos += 1
+                                            count -= 1
+                                        }
 
-                                    return@run ret
-                                } ?: listOf(),
-                                isShuffling = player?.shuffleModeEnabled ?: false
-                            ),
-                        ))
+                                        return@run ret
+                                    } ?: listOf(),
+                                    isShuffling = player?.shuffleModeEnabled ?: false
+                                ),
+                            ))
                     },
                     MoreExecutors.directExecutor(),
                 )
@@ -161,8 +163,18 @@ class MainActivity : FlutterActivity() {
 //                    playWhenReady = true
 
                     val queue = Queue(flutterEngine!!.dartExecutor.binaryMessenger)
+                    val events = PlaybackEvents(flutterEngine!!.dartExecutor.binaryMessenger)
 
                     val mediaItem = currentMediaItem
+
+                    events.addState(
+                        AllEvents(
+                            isPlaying = isPlaying,
+                            progress = currentPosition,
+                            looping = playerRepeatToLooping(repeatMode),
+                            shuffle = shuffleModeEnabled,
+                        )
+                    ) {}
 
                     queue.ensureCurrentTrack(
                         if (mediaItem == null) null else trackFromMediaItem(
@@ -175,7 +187,7 @@ class MainActivity : FlutterActivity() {
                     }
 
                     if (isPlaying) {
-                        watchPositionUpdates(PlaybackEvents(flutterEngine!!.dartExecutor.binaryMessenger))
+                        watchPositionUpdates(events)
                     }
                 }
                 player?.addListener(
@@ -303,14 +315,7 @@ class PlayerEventsListener(
 
     override fun onRepeatModeChanged(repeatMode: Int) {
         super.onRepeatModeChanged(repeatMode)
-        events.addLooping(
-            when (repeatMode) {
-                Player.REPEAT_MODE_OFF -> LoopingState.OFF
-                Player.REPEAT_MODE_ONE -> LoopingState.ONE
-                Player.REPEAT_MODE_ALL -> LoopingState.ALL
-                else -> LoopingState.OFF
-            }
-        ) {}
+        events.addLooping(playerRepeatToLooping(repeatMode)) {}
 
         Log.i("PlayerEvents.repeatMode", Player.REPEAT_MODE_ALL.toString())
     }
@@ -325,6 +330,13 @@ class PlayerEventsListener(
 
         Log.i("PlayerEvents.positionDiscontinuity", newPosition.positionMs.toString())
     }
+}
+
+private fun playerRepeatToLooping(repeatMode: Int): LoopingState = when (repeatMode) {
+    Player.REPEAT_MODE_OFF -> LoopingState.OFF
+    Player.REPEAT_MODE_ONE -> LoopingState.ONE
+    Player.REPEAT_MODE_ALL -> LoopingState.ALL
+    else -> LoopingState.OFF
 }
 
 @OptIn(UnstableApi::class)

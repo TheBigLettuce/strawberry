@@ -17,6 +17,7 @@
 */
 
 import "dart:async";
+import "dart:math" as math;
 import "dart:ui";
 
 import "package:flutter/material.dart";
@@ -73,6 +74,8 @@ class _HomePageState extends State<HomePage>
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
+    final data = MediaQuery.of(context);
+
     return Scaffold(
       bottomNavigationBar: DarkTheme(
         child: BottomBar(
@@ -82,89 +85,101 @@ class _HomePageState extends State<HomePage>
         ),
       ),
       extendBody: true,
-      body: NestedScrollView(
-        headerSliverBuilder: (context, innerBoxIsScrolled) {
-          return [
-            SliverOverlapAbsorber(
-              handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
-              sliver: SliverAppBar(
-                pinned: true,
-                floating: true,
-                leading: IconButton(
-                  onPressed: () => showLicensePage(context: context),
-                  icon: const Icon(Icons.settings_outlined),
-                ),
-                clipBehavior: Clip.antiAlias,
-                title: GestureDetector(
-                  onTap: () {
-                    SearchPage.go(context);
-                  },
-                  child: AbsorbPointer(
-                    child: Hero(
-                      tag: "SearchAnchor",
-                      child: SizedBox(
-                        height: 40,
-                        child: SearchBar(
-                          elevation: const WidgetStatePropertyAll(0),
-                          leading: const Icon(Icons.search_outlined),
-                          hintText: l10n.searchHint,
-                        ),
-                      ),
-                    ),
+      resizeToAvoidBottomInset: false,
+      body: MediaQuery(
+        data: data.copyWith(
+          padding: QueueList.of(context).currentTrack == null
+              ? data.padding
+              : data.padding + const EdgeInsets.only(bottom: 68),
+        ),
+        child: NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) {
+            return [
+              SliverOverlapAbsorber(
+                handle:
+                    NestedScrollView.sliverOverlapAbsorberHandleFor(context),
+                sliver: SliverAppBar(
+                  pinned: true,
+                  floating: true,
+                  leading: IconButton(
+                    onPressed: () => showLicensePage(context: context),
+                    icon: const Icon(Icons.settings_outlined),
                   ),
-                ),
-                forceElevated: innerBoxIsScrolled,
-                actions: [
-                  Builder(
-                    builder: (context) {
-                      return IconButton(
-                        onPressed: () {
-                          QueueModalPage.go(context);
-                        },
-                        icon: const Icon(Icons.list_alt_outlined),
-                      );
+                  clipBehavior: Clip.antiAlias,
+                  title: GestureDetector(
+                    onTap: () {
+                      SearchPage.go(context);
                     },
-                  ),
-                ],
-                shape: !innerBoxIsScrolled
-                    ? null
-                    : const RoundedRectangleBorder(
-                        borderRadius: BorderRadius.only(
-                          bottomLeft: Radius.circular(15),
-                          bottomRight: Radius.circular(15),
+                    child: AbsorbPointer(
+                      child: Hero(
+                        tag: "SearchAnchor",
+                        child: SizedBox(
+                          height: 40,
+                          child: SearchBar(
+                            elevation: const WidgetStatePropertyAll(0),
+                            leading: const Icon(Icons.search_outlined),
+                            hintText: l10n.searchHint,
+                          ),
                         ),
                       ),
-                bottom: TabBar(
-                  dividerHeight: !innerBoxIsScrolled ? null : 0,
-                  indicator: !innerBoxIsScrolled ? null : const BoxDecoration(),
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  controller: tabController,
-                  tabs: [
-                    Tab(
-                      text: l10n.albumsLabel,
-                      icon: const Icon(Icons.album_outlined),
                     ),
-                    Tab(
-                      text: l10n.tracksLabel,
-                      icon: const Icon(Icons.library_music_outlined),
-                    ),
-                    Tab(
-                      text: l10n.artistsLabel,
-                      icon: const Icon(Icons.people_outline_outlined),
+                  ),
+                  forceElevated: innerBoxIsScrolled,
+                  actions: [
+                    Builder(
+                      builder: (context) {
+                        return IconButton(
+                          onPressed: () {
+                            QueueModalPage.go(context);
+                          },
+                          icon: const Icon(Icons.list_alt_outlined),
+                        );
+                      },
                     ),
                   ],
+                  shape: !innerBoxIsScrolled
+                      ? null
+                      : const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.only(
+                            bottomLeft: Radius.circular(15),
+                            bottomRight: Radius.circular(15),
+                          ),
+                        ),
+                  bottom: TabBar(
+                    dividerHeight: !innerBoxIsScrolled ? null : 0,
+                    indicator:
+                        !innerBoxIsScrolled ? null : const BoxDecoration(),
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    controller: tabController,
+                    tabs: [
+                      Tab(
+                        text: l10n.albumsLabel,
+                        icon: const Icon(Icons.album_outlined),
+                      ),
+                      Tab(
+                        text: l10n.tracksLabel,
+                        icon: const Icon(Icons.library_music_outlined),
+                      ),
+                      Tab(
+                        text: l10n.artistsLabel,
+                        icon: const Icon(Icons.people_outline_outlined),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ];
-        },
-        body: TabBarView(
-          controller: tabController,
-          children: const [
-            DarkTheme(child: AlbumsTabBody()),
-            TracksTabBody(),
-            ArtistsTabBody(),
-          ],
+            ];
+          },
+          body: TabBarView(
+            controller: tabController,
+            children: [
+              DarkTheme(
+                child: AlbumsTabBody(onSurface: theme.colorScheme.onSurface),
+              ),
+              const TracksTabBody(),
+              const ArtistsTabBody(),
+            ],
+          ),
         ),
       ),
     );
@@ -189,6 +204,7 @@ class BottomBar extends StatefulWidget {
 
 class _BottomBarState extends State<BottomBar> {
   final pageController = PageController();
+  final sheetController = DraggableScrollableController();
 
   @override
   void initState() {
@@ -218,6 +234,7 @@ class _BottomBarState extends State<BottomBar> {
   @override
   void dispose() {
     pageController.dispose();
+    sheetController.dispose();
 
     super.dispose();
   }
@@ -231,190 +248,293 @@ class _BottomBarState extends State<BottomBar> {
 
     const radius = Radius.circular(20);
 
-    return AnnotatedRegion(
-      value: currentTrack != null
-          ? SystemUiOverlayStyle(
-              systemNavigationBarColor: theme.colorScheme.surface.withValues(
-                alpha: 0,
-              ),
-            )
-          : SystemUiOverlayStyle(
-              systemNavigationBarIconBrightness:
-                  widget.realBrightness == Brightness.dark
-                      ? Brightness.light
-                      : Brightness.dark,
-              systemNavigationBarColor: widget.realSurfaceColor,
-            ),
-      child: AnimatedSlide(
-        offset: Offset(0, currentTrack == null ? 1 : 0),
-        duration: Durations.long3,
-        curve: Easing.standard,
-        child: currentTrack == null
-            ? SizedBox(
-                width: double.infinity,
-                height: widget.bottomPadding,
-              )
-            : ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  topLeft: radius,
-                  topRight: radius,
+    return DraggableScrollableSheet(
+      controller: sheetController,
+      minChildSize:
+          (68 + widget.bottomPadding) / MediaQuery.sizeOf(context).height,
+      initialChildSize:
+          (68 + widget.bottomPadding) / MediaQuery.sizeOf(context).height,
+      maxChildSize: 0.5,
+      snap: true,
+      snapSizes: const [0.5],
+      builder: (context, controller) => AnnotatedRegion(
+        value: currentTrack != null
+            ? SystemUiOverlayStyle(
+                systemNavigationBarContrastEnforced: false,
+                systemNavigationBarIconBrightness: Brightness.light,
+                systemNavigationBarColor: theme.colorScheme.surface.withValues(
+                  alpha: 0,
                 ),
-                child: SizedBox(
-                  height: 68 + widget.bottomPadding,
+              )
+            : SystemUiOverlayStyle(
+                systemNavigationBarIconBrightness:
+                    widget.realBrightness == Brightness.dark
+                        ? Brightness.light
+                        : Brightness.dark,
+                systemNavigationBarColor: widget.realSurfaceColor,
+              ),
+        child: AnimatedSlide(
+          offset: Offset(0, currentTrack == null ? 1 : 0),
+          duration: Durations.long3,
+          curve: Easing.standard,
+          child: currentTrack == null
+              ? SizedBox(
                   width: double.infinity,
-                  child: Stack(
-                    children: [
-                      ImageFiltered(
-                        imageFilter: ImageFilter.blur(
-                          sigmaX: 1.8,
-                          sigmaY: 1.8,
-                          tileMode: TileMode.clamp,
-                        ),
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            image: DecorationImage(
-                              fit: BoxFit.cover,
-                              colorFilter: ColorFilter.mode(
-                                theme.colorScheme.surface
-                                    .withValues(alpha: 0.48),
-                                BlendMode.darken,
-                              ),
-                              // opacity: 0.8,
-                              alignment: Alignment.topCenter,
-                              image: PlatformThumbnailProvider.album(
-                                currentTrack.albumId,
-                                theme.brightness,
-                              ),
-                            ),
-                          ),
-                          child: const SizedBox.expand(),
-                        ),
-                      ),
-                      Align(
-                        alignment: Alignment.topCenter,
-                        child: TrackPlaybackProgress(
-                          track: currentTrack,
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                        ),
-                      ),
-                      if (widget.bottomPadding != 0)
-                        Align(
-                          alignment: Alignment.bottomCenter,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.bottomCenter,
-                                end: Alignment.topCenter,
-                                colors: [
-                                  Colors.black.withValues(alpha: 0.5),
-                                  Colors.black.withValues(alpha: 0.4),
-                                  Colors.black.withValues(alpha: 0.3),
-                                  Colors.black.withValues(alpha: 0.2),
-                                  Colors.black.withValues(alpha: 0.1),
-                                  Colors.black.withValues(alpha: 0.05),
-                                  Colors.black.withValues(alpha: 0),
-                                ],
-                              ),
-                            ),
-                            child: SizedBox(
-                              height: widget.bottomPadding + 8,
-                              width: double.infinity,
-                            ),
-                          ),
-                        ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ) +
-                            EdgeInsets.only(
-                              bottom: widget.bottomPadding,
-                            ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Builder(
-                              builder: (context) {
-                                final isLooping =
-                                    PlayerStateQuery.loopingOf(context);
-                                final player = Player.of(context);
+                  height: widget.bottomPadding,
+                )
+              : SingleChildScrollView(
+                  controller: controller,
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      topLeft: radius,
+                      topRight: radius,
+                    ),
+                    child: _BottomBarStack(
+                      controller: sheetController,
+                      pageController: pageController,
+                      currentTrack: currentTrack,
+                      bottomPadding: widget.bottomPadding,
+                    ),
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+}
 
-                                return IconButton(
-                                  onPressed: () {
-                                    player.flipIsLooping(context);
-                                  },
-                                  isSelected: isLooping != LoopingState.off,
-                                  icon: switch (isLooping) {
-                                    LoopingState.off =>
-                                      const Icon(Icons.repeat_rounded),
-                                    LoopingState.one =>
-                                      const Icon(Icons.repeat_one_on_outlined),
-                                    LoopingState.all =>
-                                      const Icon(Icons.repeat_on_outlined),
-                                  },
-                                );
-                              },
-                            ),
-                            Expanded(
-                              child: InkWell(
-                                borderRadius: const BorderRadius.all(
-                                  Radius.circular(15),
-                                ),
-                                onTap: () {
-                                  QueueModalPage.go(context);
-                                },
-                                child: IgnorePointer(
-                                  child: PageView.builder(
-                                    controller: pageController,
-                                    // allowImplicitScrolling: ,
-                                    // onPageChanged: (value) {
-                                    //   // queue.setAt(value);
-                                    // },
-                                    itemCount: queue.length,
-                                    itemBuilder: (context, index) {
-                                      final track = queue[index];
+class _BottomBarStack extends StatefulWidget {
+  const _BottomBarStack({
+    super.key,
+    required this.currentTrack,
+    required this.bottomPadding,
+    required this.pageController,
+    required this.controller,
+  });
 
-                                      return Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                        ),
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              track.name,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: theme.textTheme.labelLarge
-                                                  ?.copyWith(
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                            Text(
-                                              track.artist,
-                                              maxLines: 1,
-                                              style: theme.textTheme.labelMedium
-                                                  ?.copyWith(),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const PlayButton(),
-                          ],
+  final DraggableScrollableController controller;
+  final PageController pageController;
+  final double bottomPadding;
+  final Track currentTrack;
+
+  @override
+  State<_BottomBarStack> createState() => __BottomBarStackState();
+}
+
+class __BottomBarStackState extends State<_BottomBarStack> {
+  bool isExpanded = false;
+
+  double height = 0;
+
+  @override
+  void initState() {
+    super.initState();
+
+    widget.controller.addListener(listener);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(listener);
+
+    super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    height = MediaQuery.sizeOf(context).height;
+  }
+
+  void listener() {
+    final newExpanded = widget.controller.pixels.truncate() >
+        (68 + widget.bottomPadding).truncate();
+    if (newExpanded != isExpanded) {
+      setState(() {
+        isExpanded = newExpanded;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final queue = QueueList.of(context);
+
+    final currentTrack = widget.currentTrack;
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.5,
+      ),
+      child: Stack(
+        alignment: Alignment.topCenter,
+        children: [
+          ImageFiltered(
+            enabled: !isExpanded,
+            imageFilter: ImageFilter.blur(
+              sigmaX: 1.8,
+              sigmaY: 1.8,
+              tileMode: TileMode.clamp,
+            ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                image: DecorationImage(
+                  fit: BoxFit.cover,
+                  colorFilter: isExpanded
+                      ? null
+                      : ColorFilter.mode(
+                          theme.colorScheme.surface.withValues(alpha: 0.48),
+                          BlendMode.darken,
                         ),
-                      ),
-                    ],
+                  // opacity: 0.8,
+                  alignment: Alignment.topCenter,
+                  image: PlatformThumbnailProvider.album(
+                    currentTrack.albumId,
+                    theme.brightness,
                   ),
                 ),
               ),
+              child: const SizedBox.expand(),
+            ),
+          ),
+          Align(
+            alignment: Alignment.topCenter,
+            child: TrackPlaybackProgress(
+              track: currentTrack,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+            ),
+          ),
+          AnimatedOpacity(
+            opacity: isExpanded ? 0 : 1,
+            duration: Durations.medium3,
+            child: SizedBox(
+              height: 68 + widget.bottomPadding,
+              child: Stack(
+                children: [
+                  if (widget.bottomPadding != 0)
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [
+                              Colors.black.withValues(alpha: 0.5),
+                              Colors.black.withValues(alpha: 0.4),
+                              Colors.black.withValues(alpha: 0.3),
+                              Colors.black.withValues(alpha: 0.2),
+                              Colors.black.withValues(alpha: 0.1),
+                              Colors.black.withValues(alpha: 0.05),
+                              Colors.black.withValues(alpha: 0),
+                            ],
+                          ),
+                        ),
+                        child: SizedBox(
+                          height: widget.bottomPadding + 8,
+                          width: double.infinity,
+                        ),
+                      ),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ) +
+                        EdgeInsets.only(
+                          bottom: widget.bottomPadding,
+                        ),
+                    child: SizedBox(
+                      height: 68,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Builder(
+                            builder: (context) {
+                              final isLooping =
+                                  PlayerStateQuery.loopingOf(context);
+                              final player = Player.of(context);
+
+                              return IconButton(
+                                onPressed: () {
+                                  player.flipIsLooping(context);
+                                },
+                                isSelected: isLooping != LoopingState.off,
+                                icon: switch (isLooping) {
+                                  LoopingState.off =>
+                                    const Icon(Icons.repeat_rounded),
+                                  LoopingState.one =>
+                                    const Icon(Icons.repeat_one_on_outlined),
+                                  LoopingState.all =>
+                                    const Icon(Icons.repeat_on_outlined),
+                                },
+                              );
+                            },
+                          ),
+                          Expanded(
+                            child: InkWell(
+                              borderRadius: const BorderRadius.all(
+                                Radius.circular(15),
+                              ),
+                              onTap: () {
+                                QueueModalPage.go(context);
+                              },
+                              child: IgnorePointer(
+                                child: PageView.builder(
+                                  controller: widget.pageController,
+                                  // allowImplicitScrolling: ,
+                                  // onPageChanged: (value) {
+                                  //   // queue.setAt(value);
+                                  // },
+                                  itemCount: queue.length,
+                                  itemBuilder: (context, index) {
+                                    final track = queue[index];
+
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                      ),
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            track.name,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: theme.textTheme.labelLarge
+                                                ?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          Text(
+                                            track.artist,
+                                            maxLines: 1,
+                                            style: theme.textTheme.labelMedium
+                                                ?.copyWith(),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          ),
+                          const PlayButton(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -548,13 +668,7 @@ class ArtistsTabBody extends StatelessWidget {
             itemBuilder: (context, index) {
               final artist = artists[index];
 
-              return ListTile(
-                title: Text(artist.artist),
-                subtitle: Text(
-                  "${l10n.albums(artist.numberOfAlbums)} · ${l10n.tracks(artist.numberOfTracks)}",
-                ),
-                onTap: () => ArtistAlbumsPage.go(context, artist.id),
-              );
+              return ArtistTile(artist: artist);
             },
           ),
           const _BottomBarPadding(),
@@ -564,12 +678,95 @@ class ArtistsTabBody extends StatelessWidget {
   }
 }
 
+class ArtistTile extends StatelessWidget {
+  const ArtistTile({
+    super.key,
+    required this.artist,
+  });
+
+  final Artist artist;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return ListTile(
+      leading: ArtistCircle(artist: artist),
+      title: Text(artist.artist),
+      subtitle: Text(
+        "${l10n.albums(artist.numberOfAlbums)} · ${l10n.tracks(artist.numberOfTracks)}",
+      ),
+      onTap: () => ArtistAlbumsPage.go(context, artist.id),
+    );
+  }
+}
+
+class ArtistCircle extends StatelessWidget {
+  const ArtistCircle({
+    super.key,
+    required this.artist,
+  });
+
+  final Artist artist;
+
+  bool isChineseCharacter(int rune) {
+    if (rune == 0x3007 ||
+        (rune >= 0x3400 && rune <= 0x4DBF) ||
+        (rune >= 0x4E00 && rune <= 0x9FEF) ||
+        (rune >= 0x20000 && rune <= 0x2EBFF)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  String getLetters() {
+    final str = artist.artist.runes.take(2).toList();
+    if (isChineseCharacter(str.first)) {
+      return String.fromCharCode(str.first);
+    }
+
+    return String.fromCharCodes(str);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l1 = getLetters();
+
+    return ClipOval(
+      child: SizedBox.square(
+        dimension: 40,
+        child: Transform.rotate(
+          angle: -math.pi / 19,
+          child: ColoredBox(
+            color: theme.colorScheme.surfaceContainerLow,
+            child: Stack(
+              alignment: Alignment.center,
+              children: <Widget>[
+                Text(
+                  l1,
+                  style: l1.length == 1
+                      ? theme.textTheme.titleMedium
+                      : theme.textTheme.bodyLarge,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class EmptyWidget extends StatelessWidget {
   const EmptyWidget({
     super.key,
     required this.title,
+    this.onSurface,
   });
 
+  final Color? onSurface;
   final String title;
 
   @override
@@ -582,12 +779,16 @@ class EmptyWidget extends StatelessWidget {
         children: [
           Text(
             "🍓",
-            style: theme.textTheme.displayLarge,
+            style: theme.textTheme.displayLarge?.copyWith(
+              color: onSurface,
+            ),
           ),
           const Padding(padding: EdgeInsets.only(bottom: 8)),
           Text(
             title,
-            style: theme.textTheme.titleLarge,
+            style: theme.textTheme.titleLarge?.copyWith(
+              color: onSurface,
+            ),
           ),
         ],
       ),
@@ -657,14 +858,22 @@ class TracksTabBody extends StatelessWidget {
 }
 
 class AlbumsTabBody extends StatelessWidget {
-  const AlbumsTabBody({super.key});
+  const AlbumsTabBody({
+    super.key,
+    required this.onSurface,
+  });
+
+  final Color? onSurface;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final albums = AlbumsBucket.of(context);
     if (albums.isEmpty) {
-      return EmptyWidget(title: l10n.noAlbums);
+      return EmptyWidget(
+        title: l10n.noAlbums,
+        onSurface: onSurface,
+      );
     }
 
     return Padding(

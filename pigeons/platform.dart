@@ -216,6 +216,22 @@ abstract interface class PlaybackEvents {
   void addLooping(LoopingState looping);
   void addTrackChange(Track? track);
   void addShuffle(bool shuffle);
+
+  void addState(AllEvents events);
+}
+
+class AllEvents {
+  const AllEvents({
+    required this.isPlaying,
+    required this.progress,
+    required this.looping,
+    required this.shuffle,
+  });
+
+  final bool isPlaying;
+  final int progress;
+  final LoopingState looping;
+  final bool shuffle;
 }
 
 enum LoopingState {

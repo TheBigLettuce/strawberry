@@ -645,7 +645,7 @@ class _LiveArtistsBucket extends _StorageBucketLiveData<platform.Artist>
   @override
   void loadFilteredValues(List<platform.Artist> upstream) {
     for (final e in upstream) {
-      if (e.artist.startsWith(artistName)) {
+      if (e.artist.toLowerCase().startsWith(artistName)) {
         data.add(e);
       }
     }
@@ -759,7 +759,7 @@ class _ArtistsBucket extends _StorageBucket<platform.Artist>
     implements ArtistsBucket {
   @override
   LiveArtistsBucket query(String artistName) =>
-      _LiveArtistsBucket(this, artistName);
+      _LiveArtistsBucket(this, artistName.toLowerCase());
 
   @override
   Widget inject(Widget child) {
@@ -1032,6 +1032,11 @@ class __PlayerStateHolderState extends State<_PlayerStateHolder> {
           shuffleEnabled = e.shuffle;
         case TrackChange():
           return;
+        case EnsureData():
+          isPlaying = e.data.isPlaying;
+          shuffleEnabled = e.data.shuffle;
+          progress = Duration(milliseconds: e.data.progress);
+          looping = e.data.looping;
       }
 
       setState(() {});
@@ -1157,6 +1162,12 @@ class TrackChange implements PlaybackEvent {
   const TrackChange(this.track);
 
   final platform.Track? track;
+}
+
+class EnsureData implements PlaybackEvent {
+  const EnsureData(this.data);
+
+  final platform.AllEvents data;
 }
 
 class DataNotificationsImpl implements platform.DataNotifications {
@@ -1447,6 +1458,11 @@ class PlaybackEventsImpl implements platform.PlaybackEvents, Player {
     _events.add(TrackChange(track));
     queue.currentTrack = track;
     queue._stream.add(queue.order.length);
+  }
+
+  @override
+  void addState(platform.AllEvents events) {
+    _events.add(EnsureData(events));
   }
 
   @override
