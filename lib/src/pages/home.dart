@@ -88,9 +88,9 @@ class _HomePageState extends State<HomePage>
       resizeToAvoidBottomInset: false,
       body: MediaQuery(
         data: data.copyWith(
-          padding: QueueList.of(context).currentTrack == null
-              ? data.padding
-              : data.padding + const EdgeInsets.only(bottom: 68),
+          padding: QueueList.of(context).hasCurrentTrack
+              ? data.padding + const EdgeInsets.only(bottom: 68)
+              : data.padding,
         ),
         child: NestedScrollView(
           headerSliverBuilder: (context, innerBoxIsScrolled) {
@@ -220,7 +220,9 @@ class _BottomBarState extends State<BottomBar> {
     final trackId = queue.currentTrackIdx();
     if (!pageController.hasClients && trackId != 0) {
       WidgetsBinding.instance.scheduleFrameCallback((_) {
-        pageController.jumpToPage(trackId);
+        if (pageController.hasClients) {
+          pageController.jumpToPage(trackId);
+        }
       });
     } else if (pageController.hasClients && pageController.page != trackId) {
       pageController.animateToPage(
@@ -244,8 +246,6 @@ class _BottomBarState extends State<BottomBar> {
     final theme = Theme.of(context);
     final queue = QueueList.of(context);
 
-    final currentTrack = queue.currentTrack;
-
     const radius = Radius.circular(20);
 
     return DraggableScrollableSheet(
@@ -258,7 +258,7 @@ class _BottomBarState extends State<BottomBar> {
       snap: true,
       snapSizes: const [0.5],
       builder: (context, controller) => AnnotatedRegion(
-        value: currentTrack != null
+        value: queue.hasCurrentTrack
             ? SystemUiOverlayStyle(
                 systemNavigationBarContrastEnforced: false,
                 systemNavigationBarIconBrightness: Brightness.light,
@@ -274,15 +274,11 @@ class _BottomBarState extends State<BottomBar> {
                 systemNavigationBarColor: widget.realSurfaceColor,
               ),
         child: AnimatedSlide(
-          offset: Offset(0, currentTrack == null ? 1 : 0),
+          offset: Offset(0, queue.hasCurrentTrack ? 0 : 1),
           duration: Durations.long3,
           curve: Easing.standard,
-          child: currentTrack == null
-              ? SizedBox(
-                  width: double.infinity,
-                  height: widget.bottomPadding,
-                )
-              : SingleChildScrollView(
+          child: queue.hasCurrentTrack
+              ? SingleChildScrollView(
                   controller: controller,
                   child: ClipRRect(
                     borderRadius: const BorderRadius.only(
@@ -292,10 +288,14 @@ class _BottomBarState extends State<BottomBar> {
                     child: _BottomBarStack(
                       controller: sheetController,
                       pageController: pageController,
-                      currentTrack: currentTrack,
+                      currentTrack: queue.currentTrack!,
                       bottomPadding: widget.bottomPadding,
                     ),
                   ),
+                )
+              : SizedBox(
+                  width: double.infinity,
+                  height: widget.bottomPadding,
                 ),
         ),
       ),
@@ -825,7 +825,6 @@ class TracksTabBody extends StatelessWidget {
               final queue = QueueList.of(context);
 
               final track = tracks[index];
-              final isCurrent = queue.currentTrack?.id == track.id;
 
               return Column(
                 children: [
@@ -842,7 +841,7 @@ class TracksTabBody extends StatelessWidget {
                       QueueList.addOf(context, track);
                     },
                   ),
-                  if (isCurrent)
+                  if (queue.isCurrent(track.id))
                     TrackPlaybackProgress(track: track)
                   else
                     const SizedBox(height: 2),

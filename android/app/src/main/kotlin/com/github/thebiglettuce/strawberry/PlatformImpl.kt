@@ -47,6 +47,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import java.nio.ByteBuffer
 
 class MediaThumbnailsImpl(private val context: Context) : MediaThumbnails {
@@ -65,6 +66,7 @@ class MediaThumbnailsImpl(private val context: Context) : MediaThumbnails {
 class DataLoaderImpl(
     private val loader: MediaLoader,
     private val data: DataNotifications,
+    private val locks: DataLocks,
     private val makeRestoredData: ((Result<RestoredData>) -> Unit) -> Unit,
 ) :
     DataLoader {
@@ -75,7 +77,7 @@ class DataLoaderImpl(
     override fun startLoadingAlbums(callback: (Result<Unit>) -> Unit) {
         loader.loadAlbums {
             CoroutineScope(Dispatchers.Main).launch {
-                data.insertAlbums(it, null) {}
+                data.insertAlbums(it) {}
             }.join()
         }
         callback(Result.success(Unit))
@@ -84,7 +86,7 @@ class DataLoaderImpl(
     override fun startLoadingTracks(callback: (Result<Unit>) -> Unit) {
         loader.loadTracksAlbums(listOf()) {
             CoroutineScope(Dispatchers.Main).launch {
-                data.insertTracks(it, null) {}
+                data.insertTracks(it) {}
             }.join()
         }
         callback(Result.success(Unit))
@@ -93,16 +95,41 @@ class DataLoaderImpl(
     override fun startLoadingArtists(callback: (Result<Unit>) -> Unit) {
         loader.loadArtists {
             CoroutineScope(Dispatchers.Main).launch {
-                data.insertArtists(it, null) {}
+                data.insertArtists(it) {}
             }.join()
         }
         callback(Result.success(Unit))
+    }
+
+    override fun unlockAlbums() {
+        locks.albumsMux.apply {
+            if (isLocked) {
+                unlock()
+            }
+        }
+    }
+
+    override fun unlockTracks() {
+        locks.tracksMux.apply {
+            if (isLocked) {
+                unlock()
+            }
+        }
+    }
+
+    override fun unlockArtists() {
+        locks.artistsMux.apply {
+            if (isLocked) {
+                unlock()
+            }
+        }
     }
 }
 
 class PlaybackControllerImpl(
     private val contentResolver: ContentResolver,
     private val queue: Queue,
+    
     private val player: () -> Player?,
 ) :
     PlaybackController {
@@ -231,6 +258,20 @@ class PlaybackControllerImpl(
 
     override fun removeTrack(index: Long, callback: (Result<Unit>) -> Unit) {
         player()?.removeMediaItem(index.toInt())
+
+        callback(Result.success(Unit))
+    }
+
+    override fun removeIdxs(indexes: List<Long>, callback: (Result<Unit>) -> Unit) {
+        player()?.apply {
+            for (e in indexes) {
+                removeMediaItem(e.toInt())
+            }
+
+            if (this.mediaItemCount == 0) {
+                stop()
+            }
+        }
 
         callback(Result.success(Unit))
     }

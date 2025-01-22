@@ -190,7 +190,7 @@ class Thumbnailer(private val context: Context) {
 
         thumb.compress(
             Bitmap.CompressFormat.WEBP_LOSSY,
-            80,
+            100,
             stream
         )
 

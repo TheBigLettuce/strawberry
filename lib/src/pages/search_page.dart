@@ -27,7 +27,9 @@ import "package:strawberry/src/pages/home.dart";
 import "package:strawberry/src/platform/platform.dart";
 
 class SearchPage extends StatefulWidget {
-  const SearchPage({super.key});
+  const SearchPage({
+    super.key,
+  });
 
   static void go(BuildContext context) {
     context.goNamed("Search");
@@ -69,9 +71,7 @@ class _SearchPageState extends State<SearchPage> {
               onTapOutside: (event) => focusNode.unfocus(),
               elevation: const WidgetStatePropertyAll(0),
               leading: IconButton(
-                onPressed: () {
-                  context.pop();
-                },
+                onPressed: context.pop,
                 icon: const Icon(Icons.arrow_back),
               ),
               hintText: l10n.searchHint,
@@ -111,6 +111,13 @@ class __SearchPageBodyState extends State<_SearchPageBody> {
         const SliverPadding(padding: EdgeInsets.only(bottom: 8)),
         _TracksBody(
           filteringEvents: widget.filteringStream.stream,
+        ),
+        Builder(
+          builder: (context) => SliverPadding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.paddingOf(context).bottom,
+            ),
+          ),
         ),
       ],
     );
@@ -402,7 +409,7 @@ class ArtistsContent extends StatelessWidget {
         height: 56,
         width: double.infinity,
         child: ListView.builder(
-          padding: EdgeInsets.symmetric(horizontal: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           scrollDirection: Axis.horizontal,
           itemCount: artistsBucket.length,
           itemBuilder: (context, index) {

@@ -20,6 +20,7 @@ import "package:flutter/material.dart";
 import "package:flutter_animate/flutter_animate.dart";
 import "package:go_router/go_router.dart";
 import "package:strawberry/l10n/generated/app_localizations.dart";
+import "package:strawberry/src/pages/album_tracks.dart";
 import "package:strawberry/src/platform/platform.dart";
 import "package:strawberry/src/platform/platform_thumbnail.dart";
 
@@ -172,10 +173,11 @@ class QueueTrackTile extends StatelessWidget {
       children: [
         ListTile(
           leading: CircleAvatar(
-            foregroundImage: PlatformThumbnailProvider.album(
+            backgroundImage: PlatformThumbnailProvider.album(
               track.albumId,
               Theme.of(context).brightness,
             ),
+            child: isCurrent ? const IsPlayingIndicator() : null,
           ),
           title: Text(track.name),
           subtitle: Text(track.album),

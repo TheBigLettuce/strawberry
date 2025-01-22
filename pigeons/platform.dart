@@ -136,6 +136,9 @@ abstract interface class PlaybackController {
   void removeTrack(int index);
 
   @async
+  void removeIdxs(List<int> indexes);
+
+  @async
   void clearStop();
 
   @async
@@ -156,6 +159,10 @@ abstract interface class DataLoader {
   void startLoadingTracks();
   @async
   void startLoadingArtists();
+
+  void unlockAlbums();
+  void unlockTracks();
+  void unlockArtists();
 }
 
 class RestoredData {
@@ -198,15 +205,25 @@ abstract interface class Queue {
   Track? nextFromCurrent();
 }
 
+class QueueData {
+  const QueueData({
+    required this.queue,
+    required this.currentTrack,
+  });
+
+  final Track? currentTrack;
+  final List<Track> queue;
+}
+
 @FlutterApi()
 abstract interface class DataNotifications {
   void notifyAlbums();
   void notifyTracks();
   void notifyArtists();
 
-  void insertAlbums(List<Album> albums, String? generation);
-  void insertTracks(List<Track> tracks, String? generation);
-  void insertArtists(List<Artist> artists, String? generation);
+  void insertAlbums(List<Album> albums);
+  void insertTracks(List<Track> tracks);
+  void insertArtists(List<Artist> artists);
 }
 
 @FlutterApi()

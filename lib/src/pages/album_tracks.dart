@@ -48,108 +48,23 @@ class AlbumTracksPage extends StatefulWidget {
 class _AlbumTracksPageState extends State<AlbumTracksPage> {
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
     final tracks = LiveTracksBucket.of(context);
     if (tracks.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16) +
-              const EdgeInsets.only(top: 8, bottom: 4),
-          child: Text(
-            tracks.associatedAlbum?.album ?? tracks.first.album,
-            style: theme.textTheme.titleLarge,
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16) +
-              const EdgeInsets.only(bottom: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                tracks.associatedAlbum?.artist ?? tracks.first.albumArtist,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.9),
-                ),
-              ),
-              if (tracks.associatedAlbum != null)
-                Text(
-                  tracks.associatedAlbum!.formatYears(),
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                l10n.items(tracks.length),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
-                ),
-              ),
-              Row(
-                children: [
-                  GestureDetector(
-                    onTap: () {
-                      QueueList.clearAndPlayOf(context, tracks.toList());
-                    },
-                    child: Text(
-                      l10n.playAll,
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                  ),
-                  const Padding(padding: EdgeInsets.only(right: 16)),
-                  GestureDetector(
-                    onTap: () {
-                      QueueList.addAllOf(context, tracks.toList());
-                    },
-                    child: Text(
-                      l10n.addAll,
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              Text(
-                l10n.minutes(
-                  Duration(
-                    milliseconds: tracks.fold(0, (i, e) => i + e.duration),
-                  ).inMinutes,
-                ),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            itemCount: tracks.length,
-            itemBuilder: (context, index) {
-              final track = tracks[index];
+    return AlbumInfoBody(
+      album: tracks.associatedAlbum!,
+      tracks: tracks,
+      showImage: false,
+      child: ListView.builder(
+        itemCount: tracks.length,
+        itemBuilder: (context, index) {
+          final track = tracks[index];
 
-              return TrackTile(track: track);
-            },
-          ),
-        ),
-      ],
+          return TrackTile(track: track);
+        },
+      ),
     );
   }
 }
@@ -181,7 +96,6 @@ class TrackTile extends StatelessWidget {
     final theme = Theme.of(context);
     final queue = QueueList.of(context);
     final inQueue = queue.containsTrack(track);
-    final isCurrent = queue.currentTrack?.id == track.id;
 
     return Column(
       children: [
@@ -208,18 +122,26 @@ class TrackTile extends StatelessWidget {
             reverseDuration: Durations.medium1,
           ),
           onTap: () {
-            if (queue.currentTrack != null &&
-                queue.currentTrack!.id == track.id) {
+            final isCurrent = queue.isCurrent(track.id);
+
+            if (queue.hasCurrentTrack && isCurrent) {
               Player.of(context).flipIsPlaying(context);
+            } else if (queue.isNotEmpty && inQueue) {
+              final idx = queue.trackIdIndex(track.id);
+              if (idx != -1) {
+                queue.setAt(idx);
+              }
             } else {
               queue.clearAndPlay([track]);
             }
           },
           leading: CircleAvatar(
-            foregroundImage: PlatformThumbnailProvider.album(
+            backgroundImage: PlatformThumbnailProvider.album(
               track.albumId,
               theme.brightness,
             ),
+            child:
+                queue.isCurrent(track.id) ? const IsPlayingIndicator() : null,
           ),
           title: Text(track.name),
           subtitle: Text(
@@ -228,10 +150,180 @@ class TrackTile extends StatelessWidget {
         ),
         DecoratedBox(
           decoration: BoxDecoration(color: overrideColor),
-          child: isCurrent
+          child: queue.isCurrent(track.id)
               ? TrackPlaybackProgress(track: track)
               : const SizedBox(height: 2, width: double.infinity),
         ),
+      ],
+    );
+  }
+}
+
+class IsPlayingIndicator extends StatelessWidget {
+  const IsPlayingIndicator({
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isPlaying = PlayerStateQuery.isPlayingOf(context);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: theme.colorScheme.surface.withValues(alpha: 0.75),
+      ),
+      child: Center(
+        child: AnimatedCrossFade(
+          firstChild: const Icon(Icons.play_circle_outline_rounded),
+          secondChild: const Icon(Icons.pause_circle_outline_rounded),
+          crossFadeState:
+              isPlaying ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+          duration: Durations.medium1,
+        ),
+      ),
+    );
+  }
+}
+
+class AlbumInfoBody extends StatelessWidget {
+  const AlbumInfoBody({
+    super.key,
+    required this.tracks,
+    required this.album,
+    this.showImage = true,
+    this.child,
+  });
+
+  final Album album;
+  final Iterable<Track> tracks;
+
+  final bool showImage;
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              if (showImage)
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.all(Radius.circular(6)),
+                    child: SizedBox.square(
+                      dimension: 48,
+                      child: Image(
+                        image: PlatformThumbnailProvider.album(
+                          album.albumId,
+                          theme.brightness,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8, bottom: 4),
+                      child: Text(
+                        album.album,
+                        style: theme.textTheme.titleLarge,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            album.artist,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.9),
+                            ),
+                          ),
+                          Text(
+                            album.formatYears(),
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.8),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                l10n.items(album.numberOfSongs),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                ),
+              ),
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: () {
+                      QueueList.clearAndPlayOf(
+                        context,
+                        tracks,
+                      );
+                    },
+                    child: Text(
+                      l10n.playAll,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                  const Padding(padding: EdgeInsets.only(right: 16)),
+                  GestureDetector(
+                    onTap: () {
+                      QueueList.addAllOf(context, tracks);
+                    },
+                    child: Text(
+                      l10n.addAll,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Text(
+                l10n.minutes(
+                  Duration(
+                    milliseconds: tracks.fold(0, (i, e) => i + e.duration),
+                  ).inMinutes,
+                ),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (child != null) Expanded(child: child!),
       ],
     );
   }

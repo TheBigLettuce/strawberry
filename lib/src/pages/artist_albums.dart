@@ -18,10 +18,8 @@
 
 import "package:flutter/material.dart";
 import "package:go_router/go_router.dart";
-import "package:strawberry/l10n/generated/app_localizations.dart";
 import "package:strawberry/src/pages/album_tracks.dart";
 import "package:strawberry/src/platform/platform.dart";
-import "package:strawberry/src/platform/platform_thumbnail.dart";
 
 class ArtistAlbumsPage extends StatefulWidget {
   const ArtistAlbumsPage({
@@ -48,7 +46,6 @@ class _ArtistAlbumsPageState extends State<ArtistAlbumsPage> {
   @override
   Widget build(BuildContext context) {
     final albums = CombinedLiveTracksBucket.of(context);
-    // final p = ;
 
     return CustomScrollView(
       slivers: [
@@ -75,7 +72,7 @@ class _AlbumAndTracks extends StatefulWidget {
     required this.padding,
   });
 
-  final (Album, List<Track>) data;
+  final AlbumTracksRecord data;
   final EdgeInsets padding;
 
   @override
@@ -87,9 +84,7 @@ class __AlbumAndTracksState extends State<_AlbumAndTracks> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    final album = widget.data.$1;
+    final album = widget.data.album;
 
     return SliverMainAxisGroup(
       slivers: [
@@ -100,126 +95,9 @@ class __AlbumAndTracksState extends State<_AlbumAndTracks> {
                 expanded = !expanded;
               });
             },
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(right: 10),
-                        child: ClipRRect(
-                          borderRadius:
-                              const BorderRadius.all(Radius.circular(6)),
-                          child: SizedBox.square(
-                            dimension: 48,
-                            child: Image(
-                              image: PlatformThumbnailProvider.album(
-                                album.albumId,
-                                theme.brightness,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8, bottom: 4),
-                              child: Text(
-                                album.album,
-                                style: theme.textTheme.titleLarge,
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    album.artist,
-                                    style:
-                                        theme.textTheme.titleMedium?.copyWith(
-                                      color: theme.colorScheme.onSurface
-                                          .withValues(alpha: 0.9),
-                                    ),
-                                  ),
-                                  Text(
-                                    album.formatYears(),
-                                    style: theme.textTheme.titleSmall?.copyWith(
-                                      color: theme.colorScheme.onSurface
-                                          .withValues(alpha: 0.8),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        l10n.items(album.numberOfSongs),
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurface
-                              .withValues(alpha: 0.8),
-                        ),
-                      ),
-                      Row(
-                        children: [
-                          GestureDetector(
-                            onTap: () {
-                              QueueList.clearAndPlayOf(context, widget.data.$2);
-                            },
-                            child: Text(
-                              l10n.playAll,
-                              style: theme.textTheme.labelMedium?.copyWith(
-                                color: theme.colorScheme.primary,
-                              ),
-                            ),
-                          ),
-                          const Padding(padding: EdgeInsets.only(right: 16)),
-                          GestureDetector(
-                            onTap: () {
-                              QueueList.addAllOf(context, widget.data.$2);
-                            },
-                            child: Text(
-                              l10n.addAll,
-                              style: theme.textTheme.labelMedium?.copyWith(
-                                color: theme.colorScheme.primary,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Text(
-                        l10n.minutes(
-                          Duration(
-                            milliseconds: widget.data.$2
-                                .fold(0, (i, e) => i + e.duration),
-                          ).inMinutes,
-                        ),
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurface
-                              .withValues(alpha: 0.8),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            child: AlbumInfoBody(
+              album: album,
+              tracks: widget.data.tracks,
             ),
           ),
         ),
@@ -236,7 +114,7 @@ class AlbumTracks extends StatelessWidget {
     required this.data,
   });
 
-  final (Album, List<Track>)? data;
+  final AlbumTracksRecord? data;
 
   @override
   Widget build(BuildContext context) {
@@ -251,7 +129,7 @@ class AlbumTracks extends StatelessWidget {
         child: Column(
           children: data == null
               ? []
-              : data!.$2
+              : data!.tracks
                   .map(
                     (e) => TrackTile(
                       track: e,

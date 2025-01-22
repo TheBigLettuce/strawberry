@@ -16,27 +16,22 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-
 package com.github.thebiglettuce.strawberry
 
 import android.content.ComponentName
+import android.database.ContentObserver
+import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.provider.MediaStore
 import android.util.Log
 import android.view.WindowManager
-import androidx.activity.enableEdgeToEdge
 import androidx.annotation.OptIn
 import androidx.core.view.WindowCompat
-import androidx.media3.common.AudioAttributes
-import androidx.media3.common.C
 import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
-import androidx.media3.common.Metadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.media3.common.TrackSelectionParameters
-import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.github.thebiglettuce.strawberry.generated.AllEvents
@@ -52,8 +47,6 @@ import com.github.thebiglettuce.strawberry.generated.Track
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import io.flutter.embedding.android.FlutterActivity
-import io.flutter.embedding.android.FlutterFragment
-import io.flutter.embedding.android.FlutterFragmentActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -61,6 +54,7 @@ import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.produce
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlin.time.Duration.Companion.seconds
 
 class MainActivity : FlutterActivity() {
@@ -68,7 +62,33 @@ class MainActivity : FlutterActivity() {
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var positionUpdater: ReceiveChannel<Long>? = null
 
+    private val locks = DataLocks(Mutex(), Mutex(), Mutex())
     private val loader = MediaLoader(this)
+
+    private val mediaStoreUpdates by lazy {
+        object : ContentObserver(Handler(mainLooper)) {
+            override fun onChange(selfChange: Boolean) {
+                this.onChange(selfChange, null)
+            }
+
+            override fun onChange(
+                selfChange: Boolean, uris: Collection<Uri>,
+                flags: Int,
+            ) {
+                DataNotifications(flutterEngine!!.dartExecutor.binaryMessenger).apply {
+                    if (locks.albumsMux.tryLock()) {
+                        notifyAlbums { }
+                    }
+                    if (locks.tracksMux.tryLock()) {
+                        notifyTracks { }
+                    }
+                    if (locks.artistsMux.tryLock()) {
+                        notifyArtists { }
+                    }
+                }
+            }
+        }
+    }
 
     @OptIn(UnstableApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -76,6 +96,12 @@ class MainActivity : FlutterActivity() {
         window.attributes.layoutInDisplayCutoutMode =
             WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
         super.onCreate(savedInstanceState)
+
+        contentResolver.registerContentObserver(
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+            true,
+            mediaStoreUpdates,
+        )
 
         PlaybackController.setUp(
             flutterEngine!!.dartExecutor.binaryMessenger,
@@ -95,7 +121,8 @@ class MainActivity : FlutterActivity() {
             flutterEngine!!.dartExecutor.binaryMessenger,
             DataLoaderImpl(
                 loader,
-                DataNotifications(flutterEngine!!.dartExecutor.binaryMessenger)
+                DataNotifications(flutterEngine!!.dartExecutor.binaryMessenger),
+                locks,
             ) {
                 controllerFuture?.addListener(
                     {
@@ -141,6 +168,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        contentResolver.unregisterContentObserver(mediaStoreUpdates)
+
         PlaybackController.setUp(flutterEngine!!.dartExecutor.binaryMessenger, null)
         DataLoader.setUp(flutterEngine!!.dartExecutor.binaryMessenger, null)
         MediaThumbnails.setUp(flutterEngine!!.dartExecutor.binaryMessenger, null)
@@ -160,8 +189,6 @@ class MainActivity : FlutterActivity() {
         controllerFuture?.addListener(
             {
                 player = controllerFuture?.get()?.apply {
-//                    playWhenReady = true
-
                     val queue = Queue(flutterEngine!!.dartExecutor.binaryMessenger)
                     val events = PlaybackEvents(flutterEngine!!.dartExecutor.binaryMessenger)
 
@@ -352,3 +379,5 @@ fun trackFromMediaItem(mediaItem: MediaItem): Track = Track(
     albumId = mediaItem.requestMetadata.extras!!.getLong("albumId"),
     dateModified = mediaItem.requestMetadata.extras!!.getLong("dateModified"),
 )
+
+data class DataLocks(val albumsMux: Mutex, val tracksMux: Mutex, val artistsMux: Mutex)

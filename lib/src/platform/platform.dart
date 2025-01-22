@@ -49,6 +49,16 @@ extension FormatYearsAlbumExt on platform.Album {
   }
 }
 
+typedef AlbumTracksRecord = ({
+  platform.Album album,
+  List<platform.Track> tracks
+});
+
+extension QueueListExt on QueueList {
+  bool get hasCurrentTrack => currentTrack != null;
+  bool isCurrent(int trackId) => currentTrack?.id == trackId;
+}
+
 final platform.PlaybackController _controller = platform.PlaybackController();
 
 StateManager createStateManager() {
@@ -98,8 +108,12 @@ abstract interface class PlayerManager {
 }
 
 class _PlayerManager implements PlayerManager {
-  _PlayerManager(this.stateManager)
-      : data = DataNotificationsImpl(storage: stateManager.storage);
+  _PlayerManager(this.stateManager) {
+    data = DataNotificationsImpl(
+      storage: stateManager.storage,
+      queue: player.queue,
+    );
+  }
 
   final StateManager stateManager;
 
@@ -110,7 +124,7 @@ class _PlayerManager implements PlayerManager {
   platform.PlaybackEvents get playbackEvents => player;
 
   @override
-  final platform.DataNotifications data;
+  late final platform.DataNotifications data;
 
   @override
   Widget inject(Widget child) {
@@ -344,7 +358,7 @@ sealed class LiveTracksBucket extends LiveBucketData<platform.Track> {
 }
 
 sealed class CombinedLiveTracksBucket {
-  List<(platform.Album, List<platform.Track>)> get sortedTracks;
+  List<AlbumTracksRecord> get sortedTracks;
 
   Widget inject(Widget child);
 
@@ -504,8 +518,7 @@ abstract interface class StorageBucket<T> extends Iterable<T> {
   T operator [](int i);
 
   void put(List<T> elements);
-
-  void setGeneration(String generation);
+  List<int> findMissingIdx(Iterable<T> values);
 
   void clear();
   void destroy();
@@ -518,11 +531,26 @@ abstract interface class BucketSearch<T> {
 }
 
 abstract class _StorageBucket<T> extends StorageBucket<T> {
-  _StorageBucket();
+  _StorageBucket(this.id);
+
+  final int Function(T) id;
 
   final _events = StreamController<int>.broadcast();
-  // String _generation = "";
   final List<T> storage = [];
+  final Set<int> _ids = {};
+
+  @override
+  List<int> findMissingIdx(Iterable<T> values) {
+    final ret = <int>[];
+
+    for (final (idx, e) in values.indexed) {
+      if (!_ids.contains(id(e))) {
+        ret.add(idx);
+      }
+    }
+
+    return ret;
+  }
 
   @override
   T operator [](int i) => storage[i];
@@ -536,25 +564,27 @@ abstract class _StorageBucket<T> extends StorageBucket<T> {
   @override
   void put(List<T> elements) {
     storage.addAll(elements);
+    _ids.addAll(elements.map(id));
     _events.add(storage.length);
   }
 
   @override
-  void setGeneration(String generation) {
-    // _generation = generation;
-  }
-
-  @override
   void clear() {
+    _ids.clear();
     storage.clear();
     _events.add(0);
   }
 
   @override
   void destroy() {
+    _ids.clear();
     storage.clear();
     _events.close();
   }
+}
+
+abstract class Idable {
+  int get id;
 }
 
 class _CombinedLiveTracksBucket extends CombinedLiveTracksBucket {
@@ -573,7 +603,7 @@ class _CombinedLiveTracksBucket extends CombinedLiveTracksBucket {
   final _events = StreamController<int>.broadcast();
 
   @override
-  final List<(platform.Album, List<platform.Track>)> sortedTracks = [];
+  final List<AlbumTracksRecord> sortedTracks = [];
 
   @override
   Widget inject(Widget child) {
@@ -591,13 +621,14 @@ class _CombinedLiveTracksBucket extends CombinedLiveTracksBucket {
     List<platform.Track> bucketStorage,
     List<platform.Album> albums,
   ) {
-    final ret = <int, (platform.Album, List<platform.Track>)>{};
+    final ret = <int, AlbumTracksRecord>{};
 
     for (final e in bucketStorage) {
       for (final album in albums) {
         if (album.albumId == e.albumId) {
-          final l = ret[album.albumId] ?? (album, []);
-          l.$2.add(e);
+          final AlbumTracksRecord l =
+              ret[album.albumId] ?? (album: album, tracks: []);
+          l.tracks.add(e);
 
           ret[album.albumId] = l;
         }
@@ -714,6 +745,8 @@ class _LiveAlbumBucket extends _StorageBucketLiveData<platform.Album>
 
 class _AlbumBucket extends _StorageBucket<platform.Album>
     implements AlbumsBucket {
+  _AlbumBucket() : super((a) => a.albumId);
+
   @override
   LiveAlbumsBucket query(String albumName) {
     final albumNameLowerCase = albumName.toLowerCase();
@@ -757,6 +790,8 @@ class _AlbumBucket extends _StorageBucket<platform.Album>
 
 class _ArtistsBucket extends _StorageBucket<platform.Artist>
     implements ArtistsBucket {
+  _ArtistsBucket() : super((a) => a.id);
+
   @override
   LiveArtistsBucket query(String artistName) =>
       _LiveArtistsBucket(this, artistName.toLowerCase());
@@ -776,6 +811,8 @@ class _ArtistsBucket extends _StorageBucket<platform.Artist>
 
 class _TracksBucket extends _StorageBucket<platform.Track>
     implements TracksBucket {
+  _TracksBucket() : super((t) => t.id);
+
   @override
   LiveTracksBucket query(String trackName) {
     final trackNameLower = trackName.toLowerCase();
@@ -1071,11 +1108,12 @@ abstract interface class QueueList extends Iterable<platform.Track>
   void operator []=(int id, platform.Track track);
 
   int currentTrackIdx();
+  int trackIdIndex(int trackId);
 
-  void clearAndPlay(List<platform.Track> tracks);
+  void clearAndPlay(Iterable<platform.Track> tracks);
   void clearStop();
   void add(platform.Track track);
-  void addAll(List<platform.Track> tracks);
+  void addAll(Iterable<platform.Track> tracks);
   void removeAt(int idx);
   void setAt(int idx);
   void removeTrack(platform.Track track);
@@ -1101,14 +1139,14 @@ abstract interface class QueueList extends Iterable<platform.Track>
 
   static void clearAndPlayOf(
     BuildContext context,
-    List<platform.Track> tracks,
+    Iterable<platform.Track> tracks,
   ) =>
       _getOf(context).clearAndPlay(tracks);
 
   static void addOf(BuildContext context, platform.Track track) =>
       _getOf(context).add(track);
 
-  static void addAllOf(BuildContext context, List<platform.Track> tracks) =>
+  static void addAllOf(BuildContext context, Iterable<platform.Track> tracks) =>
       _getOf(context).addAll(tracks);
 
   static void removeAtOf(BuildContext context, int idx) =>
@@ -1173,32 +1211,41 @@ class EnsureData implements PlaybackEvent {
 class DataNotificationsImpl implements platform.DataNotifications {
   DataNotificationsImpl({
     required this.storage,
+    required this.queue,
   });
 
   final StorageDriver storage;
+  final _QueueList queue;
   final loader = platform.DataLoader();
 
   @override
-  void insertAlbums(List<platform.Album> albums, String? generation) {
+  void insertAlbums(List<platform.Album> albums) {
     storage.albums.put(albums);
-    if (generation != null) {
-      storage.albums.setGeneration(generation);
+
+    if (albums.isEmpty) {
+      loader.unlockAlbums();
     }
   }
 
   @override
-  void insertArtists(List<platform.Artist> artists, String? generation) {
+  void insertArtists(List<platform.Artist> artists) {
     storage.artists.put(artists);
-    if (generation != null) {
-      storage.artists.setGeneration(generation);
+
+    if (artists.isEmpty) {
+      loader.unlockArtists();
     }
   }
 
   @override
-  void insertTracks(List<platform.Track> tracks, String? generation) {
+  void insertTracks(List<platform.Track> tracks) {
     storage.tracks.put(tracks);
-    if (generation != null) {
-      storage.tracks.setGeneration(generation);
+
+    if (tracks.isEmpty) {
+      final missingIdx = storage.tracks.findMissingIdx(queue);
+      if (missingIdx.isNotEmpty) {
+        queue._removeAtAll(missingIdx);
+      }
+      loader.unlockTracks();
     }
   }
 
@@ -1262,10 +1309,19 @@ class _QueueList extends QueueList {
   @override
   int currentTrackIdx() {
     if (currentTrack == null) {
-      return 0;
+      return -1;
     }
 
     return order.indexWhere((e) => e.id == currentTrack!.id);
+  }
+
+  @override
+  int trackIdIndex(int trackId) {
+    if (order.isEmpty) {
+      return -1;
+    }
+
+    return order.indexWhere((e) => e.id == trackId);
   }
 
   @override
@@ -1302,14 +1358,14 @@ class _QueueList extends QueueList {
       return;
     }
 
+    _map[track.id] = null;
     order.add(track);
     _stream.add(order.length);
     _controller.addTrack(track.id);
-    _map[track.id] = null;
   }
 
   @override
-  void addAll(List<platform.Track> tracks, [bool set = false]) {
+  void addAll(Iterable<platform.Track> tracks, [bool set = false]) {
     final actualTracks = <platform.Track>[];
 
     for (final e in tracks) {
@@ -1330,8 +1386,19 @@ class _QueueList extends QueueList {
     }
   }
 
+  void _restore(platform.RestoredData data) {
+    _map.clear();
+    order.clear();
+
+    order.addAll(data.queue);
+    for (final e in data.queue) {
+      _map[e.id] = null;
+    }
+    _stream.add(order.length);
+  }
+
   @override
-  void clearAndPlay(List<platform.Track> tracks) {
+  void clearAndPlay(Iterable<platform.Track> tracks) {
     _map.clear();
     order.clear();
 
@@ -1358,6 +1425,22 @@ class _QueueList extends QueueList {
     if (order.isEmpty) {
       currentTrack = null;
     }
+  }
+
+  @override
+  void _removeAtAll(List<int> idxs) {
+    final idxsSorted = idxs.toList()..sort();
+
+    for (final idx in idxsSorted.reversed) {
+      final e = order.removeAt(idx);
+      _map.remove(e.id);
+
+      if (order.isEmpty) {
+        currentTrack = null;
+      }
+    }
+
+    _stream.add(order.length);
   }
 
   @override
@@ -1428,8 +1511,8 @@ class PlaybackEventsImpl implements platform.PlaybackEvents, Player {
   @override
   void restore(platform.RestoredData data) {
     restoredData = data;
-    queue.order.clear();
-    queue.order.addAll(data.queue);
+    queue._restore(data);
+
     queue.currentTrack = data.currentTrack;
   }
 
