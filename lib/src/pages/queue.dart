@@ -19,6 +19,7 @@
 import "package:flutter/material.dart";
 import "package:flutter_animate/flutter_animate.dart";
 import "package:go_router/go_router.dart";
+import "package:strawberry/exts.dart";
 import "package:strawberry/l10n/generated/app_localizations.dart";
 import "package:strawberry/src/pages/album_tracks.dart";
 import "package:strawberry/src/platform/platform.dart";
@@ -29,7 +30,7 @@ class QueueModalPage extends StatefulWidget {
     super.key,
   });
 
-  static void go(BuildContext context, [int seekTo = 0]) {
+  static void go(BuildContext context) {
     context.goNamed("QueueModal");
   }
 
@@ -49,7 +50,7 @@ class _QueueModalPageState extends State<QueueModalPage> {
         child: Text(
           l10n.empty,
           style: theme.textTheme.headlineMedium?.copyWith(
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+            color: theme.colorScheme.onSurface.valueAlpha(0.8),
           ),
         ),
       ).animate().fadeIn();
@@ -62,23 +63,9 @@ class _QueueModalPageState extends State<QueueModalPage> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              Builder(
-                builder: (context) {
-                  final shuffle = PlayerStateQuery.isShuffleOf(context);
-
-                  return IconButton(
-                    onPressed: () {
-                      Player.of(context).flipIsShuffling(context);
-                    },
-                    isSelected: shuffle,
-                    icon: const Icon(Icons.shuffle),
-                  );
-                },
-              ),
+              const ShuffleButton(),
               IconButton(
-                onPressed: () {
-                  queue.clearStop();
-                },
+                onPressed: queue.clearStop,
                 icon: const Icon(Icons.close),
               ),
             ],
@@ -94,11 +81,7 @@ class _QueueModalPageState extends State<QueueModalPage> {
                 style: theme.textTheme.bodyMedium,
               ),
               Text(
-                l10n.minutes(
-                  Duration(
-                    milliseconds: queue.fold(0, (i, e) => i + e.duration),
-                  ).inMinutes,
-                ),
+                l10n.minutes(queue.countDurationMinutes()),
                 style: theme.textTheme.bodyMedium,
               ),
             ],
@@ -106,16 +89,6 @@ class _QueueModalPageState extends State<QueueModalPage> {
         ),
         Expanded(
           child: ReorderableListView.builder(
-            // header: queue.currentTrack == null
-            //     ? null
-            //     : Padding(
-            //         padding: EdgeInsets.only(bottom: 40),
-            //         child: QueueTrackTile(
-            //           track: queue.currentTrack!,
-            //           isCurrent: true,
-            //           index: -1,
-            //         ),
-            //       ),
             onReorder: (oldIndex, newIndex) {
               if (newIndex >= queue.length) {
                 queue.shiftIndex(oldIndex, queue.length - 1);
@@ -126,18 +99,17 @@ class _QueueModalPageState extends State<QueueModalPage> {
             itemCount: queue.length,
             itemBuilder: (context, index) {
               final track = queue[index];
-              final current = queue.current();
+              // final current = queue.current();
 
               return Dismissible(
-                direction: DismissDirection.endToStart,
-                // dismissThresholds: const {DismissDirection.endToStart: 0.5},
                 key: ValueKey((track.id, index)),
+                direction: DismissDirection.endToStart,
                 onDismissed: (direction) {
                   QueueList.removeAtOf(context, index);
                 },
                 child: QueueTrackTile(
                   track: track,
-                  isCurrent: current != null && current.id == track.id,
+                  isCurrent: queue.hasCurrentTrack && queue.isCurrent(track.id),
                   index: index,
                 ),
               );
@@ -150,6 +122,25 @@ class _QueueModalPageState extends State<QueueModalPage> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class ShuffleButton extends StatelessWidget {
+  const ShuffleButton({
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final shuffle = PlayerStateQuery.isShuffleOf(context);
+
+    return IconButton(
+      onPressed: () {
+        Player.of(context).flipIsShuffling(context);
+      },
+      isSelected: shuffle,
+      icon: const Icon(Icons.shuffle),
     );
   }
 }
@@ -169,23 +160,27 @@ class QueueTrackTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Column(
       children: [
         ListTile(
           leading: CircleAvatar(
             backgroundImage: PlatformThumbnailProvider.album(
               track.albumId,
-              Theme.of(context).brightness,
+              theme.brightness,
             ),
             child: isCurrent ? const IsPlayingIndicator() : null,
           ),
           title: Text(track.name),
           subtitle: Text(track.album),
           onTap: () {
+            final player = Player.of(context);
+
             if (index < 0) {
-              Player.of(context).flipIsPlaying(context);
+              player.flipIsPlaying(context);
             } else {
-              Player.of(context).changeOrPlay(context, track, index);
+              player.changeOrPlay(context, track, index);
             }
           },
         ),
@@ -214,15 +209,18 @@ class TrackPlaybackProgress extends StatelessWidget {
   Widget build(BuildContext context) {
     final progress = PlayerStateQuery.progressOf(context).inMilliseconds;
 
-    return Padding(
-      padding: padding,
-      child: LinearProgressIndicator(
-        trackGap: 0,
-        minHeight: height,
-        year2023: false,
-        value: progress <= 0 || track.duration <= 0
-            ? 0
-            : progress / track.duration,
+    return DecoratedBox(
+      decoration: BoxDecoration(boxShadow: kElevationToShadow[1]),
+      child: Padding(
+        padding: padding,
+        child: LinearProgressIndicator(
+          trackGap: 0,
+          minHeight: height,
+          year2023: false,
+          value: progress <= 0 || track.duration <= 0
+              ? 0
+              : progress / track.duration,
+        ),
       ),
     );
   }

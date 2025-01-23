@@ -22,7 +22,7 @@ import "dart:ui";
 
 import "package:flutter/material.dart";
 import "package:flutter/services.dart";
-import "package:flutter_animate/flutter_animate.dart";
+import "package:strawberry/exts.dart";
 import "package:strawberry/l10n/generated/app_localizations.dart";
 import "package:strawberry/src/pages/album_tracks.dart";
 import "package:strawberry/src/pages/artist_albums.dart";
@@ -44,6 +44,7 @@ class _HomePageState extends State<HomePage>
     with SingleTickerProviderStateMixin {
   late final StreamSubscription<void> _watcher;
   late final TabController tabController;
+  final sheetController = DraggableScrollableController();
 
   late PlayerManager playerManager;
 
@@ -58,6 +59,7 @@ class _HomePageState extends State<HomePage>
   void dispose() {
     _watcher.cancel();
     tabController.dispose();
+    sheetController.dispose();
 
     super.dispose();
   }
@@ -76,12 +78,15 @@ class _HomePageState extends State<HomePage>
 
     final data = MediaQuery.of(context);
 
+    final bottomPadding = MediaQuery.viewPaddingOf(context).bottom;
+
     return Scaffold(
       bottomNavigationBar: DarkTheme(
         child: BottomBar(
           realBrightness: theme.colorScheme.brightness,
           realSurfaceColor: theme.colorScheme.surface,
-          bottomPadding: MediaQuery.viewPaddingOf(context).bottom,
+          bottomPadding: bottomPadding,
+          sheetController: sheetController,
         ),
       ),
       extendBody: true,
@@ -192,11 +197,13 @@ class BottomBar extends StatefulWidget {
     required this.bottomPadding,
     required this.realSurfaceColor,
     required this.realBrightness,
+    required this.sheetController,
   });
 
   final double bottomPadding;
   final Color realSurfaceColor;
   final Brightness realBrightness;
+  final DraggableScrollableController sheetController;
 
   @override
   State<BottomBar> createState() => _BottomBarState();
@@ -204,12 +211,6 @@ class BottomBar extends StatefulWidget {
 
 class _BottomBarState extends State<BottomBar> {
   final pageController = PageController();
-  final sheetController = DraggableScrollableController();
-
-  @override
-  void initState() {
-    super.initState();
-  }
 
   @override
   void didChangeDependencies() {
@@ -236,7 +237,6 @@ class _BottomBarState extends State<BottomBar> {
   @override
   void dispose() {
     pageController.dispose();
-    sheetController.dispose();
 
     super.dispose();
   }
@@ -248,12 +248,13 @@ class _BottomBarState extends State<BottomBar> {
 
     const radius = Radius.circular(20);
 
+    final minSize =
+        (68 + widget.bottomPadding) / MediaQuery.sizeOf(context).height;
+
     return DraggableScrollableSheet(
-      controller: sheetController,
-      minChildSize:
-          (68 + widget.bottomPadding) / MediaQuery.sizeOf(context).height,
-      initialChildSize:
-          (68 + widget.bottomPadding) / MediaQuery.sizeOf(context).height,
+      controller: widget.sheetController,
+      minChildSize: minSize,
+      initialChildSize: minSize,
       maxChildSize: 0.5,
       snap: true,
       snapSizes: const [0.5],
@@ -262,15 +263,11 @@ class _BottomBarState extends State<BottomBar> {
             ? SystemUiOverlayStyle(
                 systemNavigationBarContrastEnforced: false,
                 systemNavigationBarIconBrightness: Brightness.light,
-                systemNavigationBarColor: theme.colorScheme.surface.withValues(
-                  alpha: 0,
-                ),
+                systemNavigationBarColor:
+                    theme.colorScheme.surface.valueAlpha(0),
               )
             : SystemUiOverlayStyle(
-                systemNavigationBarIconBrightness:
-                    widget.realBrightness == Brightness.dark
-                        ? Brightness.light
-                        : Brightness.dark,
+                systemNavigationBarIconBrightness: widget.realBrightness.flip,
                 systemNavigationBarColor: widget.realSurfaceColor,
               ),
         child: AnimatedSlide(
@@ -286,7 +283,7 @@ class _BottomBarState extends State<BottomBar> {
                       topRight: radius,
                     ),
                     child: _BottomBarStack(
-                      controller: sheetController,
+                      controller: widget.sheetController,
                       pageController: pageController,
                       currentTrack: queue.currentTrack!,
                       bottomPadding: widget.bottomPadding,
@@ -305,7 +302,7 @@ class _BottomBarState extends State<BottomBar> {
 
 class _BottomBarStack extends StatefulWidget {
   const _BottomBarStack({
-    super.key,
+    // super.key,
     required this.currentTrack,
     required this.bottomPadding,
     required this.pageController,
@@ -321,46 +318,17 @@ class _BottomBarStack extends StatefulWidget {
   State<_BottomBarStack> createState() => __BottomBarStackState();
 }
 
-class __BottomBarStackState extends State<_BottomBarStack> {
-  bool isExpanded = false;
-
-  double height = 0;
+class __BottomBarStackState extends State<_BottomBarStack>
+    with _SlidingBarExpandedStateMixin {
+  @override
+  int get barSize => (68 + widget.bottomPadding).truncate();
 
   @override
-  void initState() {
-    super.initState();
-
-    widget.controller.addListener(listener);
-  }
-
-  @override
-  void dispose() {
-    widget.controller.removeListener(listener);
-
-    super.dispose();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-
-    height = MediaQuery.sizeOf(context).height;
-  }
-
-  void listener() {
-    final newExpanded = widget.controller.pixels.truncate() >
-        (68 + widget.bottomPadding).truncate();
-    if (newExpanded != isExpanded) {
-      setState(() {
-        isExpanded = newExpanded;
-      });
-    }
-  }
+  DraggableScrollableController get controller => widget.controller;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final queue = QueueList.of(context);
 
     final currentTrack = widget.currentTrack;
 
@@ -385,11 +353,11 @@ class __BottomBarStackState extends State<_BottomBarStack> {
                   colorFilter: isExpanded
                       ? null
                       : ColorFilter.mode(
-                          theme.colorScheme.surface.withValues(alpha: 0.48),
+                          theme.colorScheme.surface.valueAlpha(0.48),
                           BlendMode.darken,
                         ),
-                  // opacity: 0.8,
                   alignment: Alignment.topCenter,
+                  filterQuality: FilterQuality.high,
                   image: PlatformThumbnailProvider.album(
                     currentTrack.albumId,
                     theme.brightness,
@@ -422,13 +390,13 @@ class __BottomBarStackState extends State<_BottomBarStack> {
                             begin: Alignment.bottomCenter,
                             end: Alignment.topCenter,
                             colors: [
-                              Colors.black.withValues(alpha: 0.5),
-                              Colors.black.withValues(alpha: 0.4),
-                              Colors.black.withValues(alpha: 0.3),
-                              Colors.black.withValues(alpha: 0.2),
-                              Colors.black.withValues(alpha: 0.1),
-                              Colors.black.withValues(alpha: 0.05),
-                              Colors.black.withValues(alpha: 0),
+                              Colors.black.valueAlpha(0.5),
+                              Colors.black.valueAlpha(0.4),
+                              Colors.black.valueAlpha(0.3),
+                              Colors.black.valueAlpha(0.2),
+                              Colors.black.valueAlpha(0.1),
+                              Colors.black.valueAlpha(0.05),
+                              Colors.black.valueAlpha(0),
                             ],
                           ),
                         ),
@@ -451,78 +419,10 @@ class __BottomBarStackState extends State<_BottomBarStack> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Builder(
-                            builder: (context) {
-                              final isLooping =
-                                  PlayerStateQuery.loopingOf(context);
-                              final player = Player.of(context);
-
-                              return IconButton(
-                                onPressed: () {
-                                  player.flipIsLooping(context);
-                                },
-                                isSelected: isLooping != LoopingState.off,
-                                icon: switch (isLooping) {
-                                  LoopingState.off =>
-                                    const Icon(Icons.repeat_rounded),
-                                  LoopingState.one =>
-                                    const Icon(Icons.repeat_one_on_outlined),
-                                  LoopingState.all =>
-                                    const Icon(Icons.repeat_on_outlined),
-                                },
-                              );
-                            },
-                          ),
+                          const LoopingButton(),
                           Expanded(
-                            child: InkWell(
-                              borderRadius: const BorderRadius.all(
-                                Radius.circular(15),
-                              ),
-                              onTap: () {
-                                QueueModalPage.go(context);
-                              },
-                              child: IgnorePointer(
-                                child: PageView.builder(
-                                  controller: widget.pageController,
-                                  // allowImplicitScrolling: ,
-                                  // onPageChanged: (value) {
-                                  //   // queue.setAt(value);
-                                  // },
-                                  itemCount: queue.length,
-                                  itemBuilder: (context, index) {
-                                    final track = queue[index];
-
-                                    return Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                      ),
-                                      child: Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            track.name,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: theme.textTheme.labelLarge
-                                                ?.copyWith(
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                          Text(
-                                            track.artist,
-                                            maxLines: 1,
-                                            style: theme.textTheme.labelMedium
-                                                ?.copyWith(),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
+                            child: CurrentTrackPages(
+                              pageController: widget.pageController,
                             ),
                           ),
                           const PlayButton(),
@@ -535,6 +435,88 @@ class __BottomBarStackState extends State<_BottomBarStack> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class LoopingButton extends StatelessWidget {
+  const LoopingButton({
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isLooping = PlayerStateQuery.loopingOf(context);
+    final player = Player.of(context);
+
+    return IconButton(
+      onPressed: () {
+        player.flipIsLooping(context);
+      },
+      isSelected: isLooping != LoopingState.off,
+      icon: switch (isLooping) {
+        LoopingState.off => const Icon(Icons.repeat_rounded),
+        LoopingState.one => const Icon(Icons.repeat_one_on_outlined),
+        LoopingState.all => const Icon(Icons.repeat_on_outlined),
+      },
+    );
+  }
+}
+
+class CurrentTrackPages extends StatelessWidget {
+  const CurrentTrackPages({
+    super.key,
+    required this.pageController,
+  });
+
+  final PageController pageController;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final queue = QueueList.of(context);
+
+    return InkWell(
+      borderRadius: const BorderRadius.all(
+        Radius.circular(15),
+      ),
+      onTap: () {
+        QueueModalPage.go(context);
+      },
+      child: IgnorePointer(
+        child: PageView.builder(
+          controller: pageController,
+          itemCount: queue.length,
+          itemBuilder: (context, index) {
+            final track = queue[index];
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 6,
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    track.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    track.artist,
+                    maxLines: 1,
+                    style: theme.textTheme.labelMedium,
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -565,7 +547,9 @@ class DarkTheme extends StatelessWidget {
 }
 
 class PlayButton extends StatefulWidget {
-  const PlayButton({super.key});
+  const PlayButton({
+    super.key,
+  });
 
   @override
   State<PlayButton> createState() => _PlayButtonState();
@@ -613,36 +597,34 @@ class _PlayButtonState extends State<PlayButton>
 
   @override
   Widget build(BuildContext context) {
-    return Builder(
-      builder: (context) {
-        final isPlaying = PlayerStateQuery.isPlayingOf(context);
-        final player = Player.of(context);
+    final isPlaying = PlayerStateQuery.isPlayingOf(context);
+    final player = Player.of(context);
 
-        return IconButton.filledTonal(
-          onPressed: () {
-            player.flipIsPlaying(context);
-          },
-          style: const ButtonStyle(
-            shape: WidgetStateOutlinedBorder.fromMap({
-              WidgetState.selected: CircleBorder(),
-              WidgetState.any: RoundedRectangleBorder(
-                borderRadius: BorderRadius.all(Radius.circular(10)),
-              ),
-            }),
-          ),
-          isSelected: isPlaying,
-          icon: AnimatedIcon(
-            icon: AnimatedIcons.play_pause,
-            progress: controller.view,
-          ),
-        );
+    return IconButton.filledTonal(
+      onPressed: () {
+        player.flipIsPlaying(context);
       },
+      style: const ButtonStyle(
+        shape: WidgetStateOutlinedBorder.fromMap({
+          WidgetState.selected: CircleBorder(),
+          WidgetState.any: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(10)),
+          ),
+        }),
+      ),
+      isSelected: isPlaying,
+      icon: AnimatedIcon(
+        icon: AnimatedIcons.play_pause,
+        progress: controller.view,
+      ),
     );
   }
 }
 
 class ArtistsTabBody extends StatelessWidget {
-  const ArtistsTabBody({super.key});
+  const ArtistsTabBody({
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -709,30 +691,10 @@ class ArtistCircle extends StatelessWidget {
 
   final Artist artist;
 
-  bool isChineseCharacter(int rune) {
-    if (rune == 0x3007 ||
-        (rune >= 0x3400 && rune <= 0x4DBF) ||
-        (rune >= 0x4E00 && rune <= 0x9FEF) ||
-        (rune >= 0x20000 && rune <= 0x2EBFF)) {
-      return true;
-    }
-
-    return false;
-  }
-
-  String getLetters() {
-    final str = artist.artist.runes.take(2).toList();
-    if (isChineseCharacter(str.first)) {
-      return String.fromCharCode(str.first);
-    }
-
-    return String.fromCharCodes(str);
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final l1 = getLetters();
+    final firstLetters = artist.firstLetters;
 
     return ClipOval(
       child: SizedBox.square(
@@ -745,8 +707,8 @@ class ArtistCircle extends StatelessWidget {
               alignment: Alignment.center,
               children: <Widget>[
                 Text(
-                  l1,
-                  style: l1.length == 1
+                  firstLetters,
+                  style: firstLetters.length == 1
                       ? theme.textTheme.titleMedium
                       : theme.textTheme.bodyLarge,
                 ),
@@ -822,30 +784,12 @@ class TracksTabBody extends StatelessWidget {
           SliverList.builder(
             itemCount: tracks.length,
             itemBuilder: (context, index) {
-              final queue = QueueList.of(context);
-
               final track = tracks[index];
 
-              return Column(
-                children: [
-                  ListTile(
-                    trailing: CircleAvatar(
-                      foregroundImage: PlatformThumbnailProvider.album(
-                        track.albumId,
-                        Theme.of(context).brightness,
-                      ),
-                    ),
-                    title: Text(track.name),
-                    subtitle: Text("${track.artist} · ${track.album}"),
-                    onTap: () {
-                      QueueList.addOf(context, track);
-                    },
-                  ),
-                  if (queue.isCurrent(track.id))
-                    TrackPlaybackProgress(track: track)
-                  else
-                    const SizedBox(height: 2),
-                ],
+              return TrackTile(
+                track: track,
+                reverseIcon: true,
+                maxLines: 1,
               );
             },
           ),
@@ -875,39 +819,34 @@ class AlbumsTabBody extends StatelessWidget {
       );
     }
 
-    return Padding(
-      padding: EdgeInsets.zero,
-      child: Scrollbar(
-        interactive: true,
-        child: CustomScrollView(
-          key: const PageStorageKey("Albums"),
-          slivers: [
-            SliverOverlapInjector(
-              handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
-                context,
-              ),
-              // sliver:,
+    return Scrollbar(
+      interactive: true,
+      child: CustomScrollView(
+        key: const PageStorageKey("Albums"),
+        slivers: [
+          SliverOverlapInjector(
+            handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
+              context,
             ),
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              sliver: SliverGrid.builder(
-                // padding: EdgeInsets.symmetric(
-                //     vertical: 8, horizontal: 12),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  childAspectRatio: 0.7,
-                ),
-                itemCount: albums.length,
-                itemBuilder: (context, index) {
-                  final album = albums[index];
+            // sliver:,
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            sliver: SliverGrid.builder(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                childAspectRatio: 0.7,
+              ),
+              itemCount: albums.length,
+              itemBuilder: (context, index) {
+                final album = albums[index];
 
-                  return AlbumCard(album: album);
-                },
-              ),
+                return AlbumCard(album: album);
+              },
             ),
-            const _BottomBarPadding(),
-          ],
-        ),
+          ),
+          const _BottomBarPadding(),
+        ],
       ),
     );
   }
@@ -939,7 +878,7 @@ class AlbumCard extends StatelessWidget {
           },
           child: Card(
             elevation: 0,
-            color: theme.colorScheme.surfaceBright.withValues(alpha: 0.5),
+            color: theme.colorScheme.surfaceBright.valueAlpha(0.5),
             clipBehavior: Clip.antiAlias,
             child: Stack(
               alignment: Alignment.bottomCenter,
@@ -949,20 +888,8 @@ class AlbumCard extends StatelessWidget {
                     child: Hero(
                       tag: album.id,
                       child: Image(
-                        frameBuilder: (
-                          context,
-                          child,
-                          frame,
-                          wasSynchronouslyLoaded,
-                        ) {
-                          if (wasSynchronouslyLoaded) {
-                            return child;
-                          }
-
-                          return frame == null
-                              ? const SizedBox.shrink()
-                              : child.animate().fadeIn();
-                        },
+                        frameBuilder:
+                            PlatformThumbnailProvider.defaultFrameBuilder,
                         alignment: Alignment.topCenter,
                         fit: BoxFit.cover,
                         image: PlatformThumbnailProvider.album(
@@ -979,11 +906,11 @@ class AlbumCard extends StatelessWidget {
                       begin: Alignment.bottomCenter,
                       end: Alignment.topCenter,
                       colors: [
-                        theme.colorScheme.surface.withValues(alpha: 0.8),
-                        theme.colorScheme.surface.withValues(alpha: 0.6),
-                        theme.colorScheme.surface.withValues(alpha: 0.4),
-                        theme.colorScheme.surface.withValues(alpha: 0.2),
-                        theme.colorScheme.surface.withValues(alpha: 0),
+                        theme.colorScheme.surface.valueAlpha(0.8),
+                        theme.colorScheme.surface.valueAlpha(0.6),
+                        theme.colorScheme.surface.valueAlpha(0.4),
+                        theme.colorScheme.surface.valueAlpha(0.2),
+                        theme.colorScheme.surface.valueAlpha(0),
                       ],
                     ),
                   ),
@@ -1013,17 +940,31 @@ class AlbumCard extends StatelessWidget {
                             horizontal: 12,
                           ) +
                           const EdgeInsets.only(bottom: 8),
-                      child: Text.rich(
-                        TextSpan(
-                          text: album.artist,
-                          children: [
-                            TextSpan(text: " · ${album.formatYears()}"),
-                          ],
-                        ),
-                        maxLines: 1,
-                        textAlign: TextAlign.left,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelMedium,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              album.artist,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.labelMedium,
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 6),
+                            child: Text(
+                              album.yearsFormatted,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color:
+                                    theme.colorScheme.onSurface.valueAlpha(0.8),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -1038,9 +979,9 @@ class AlbumCard extends StatelessWidget {
 }
 
 class _BottomBarPadding extends StatelessWidget {
-  const _BottomBarPadding({
-    super.key,
-  });
+  const _BottomBarPadding(
+      // {super.key}
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -1049,5 +990,36 @@ class _BottomBarPadding extends StatelessWidget {
         bottom: MediaQuery.paddingOf(context).bottom,
       ),
     );
+  }
+}
+
+mixin _SlidingBarExpandedStateMixin<T extends StatefulWidget> on State<T> {
+  DraggableScrollableController get controller;
+
+  bool isExpanded = false;
+
+  int get barSize;
+
+  @override
+  void initState() {
+    super.initState();
+
+    controller.addListener(_listener);
+  }
+
+  @override
+  void dispose() {
+    controller.removeListener(_listener);
+
+    super.dispose();
+  }
+
+  void _listener() {
+    final newExpanded = controller.pixels.truncate() > barSize;
+    if (newExpanded != isExpanded) {
+      setState(() {
+        isExpanded = newExpanded;
+      });
+    }
   }
 }

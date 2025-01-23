@@ -19,7 +19,9 @@
 import "dart:async";
 
 import "package:flutter/material.dart";
+import "package:flutter/services.dart";
 import "package:go_router/go_router.dart";
+import "package:strawberry/exts.dart";
 import "package:strawberry/l10n/generated/app_localizations.dart";
 import "package:strawberry/src/pages/album_tracks.dart";
 import "package:strawberry/src/pages/artist_albums.dart";
@@ -55,11 +57,18 @@ class _SearchPageState extends State<SearchPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         actionsPadding: EdgeInsets.zero,
         automaticallyImplyLeading: false,
+        systemOverlayStyle: SystemUiOverlayStyle(
+          statusBarIconBrightness: theme.colorScheme.brightness.flip,
+          statusBarColor: theme.colorScheme.surface.valueAlpha(0.9),
+        ),
+        forceMaterialTransparency: true,
         title: Hero(
           tag: "SearchAnchor",
           child: SizedBox(
@@ -69,7 +78,7 @@ class _SearchPageState extends State<SearchPage> {
               onChanged: filteringStream.add,
               onSubmitted: filteringStream.add,
               onTapOutside: (event) => focusNode.unfocus(),
-              elevation: const WidgetStatePropertyAll(0),
+              elevation: const WidgetStatePropertyAll(2),
               leading: IconButton(
                 onPressed: context.pop,
                 icon: const Icon(Icons.arrow_back),
@@ -101,14 +110,16 @@ class __SearchPageBodyState extends State<_SearchPageBody> {
   Widget build(BuildContext context) {
     return CustomScrollView(
       slivers: [
+        Builder(
+          builder: (context) => SliverPadding(
+              padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top)),
+        ),
         _ArtistsBody(
           filteringEvents: widget.filteringStream.stream,
         ),
-        const SliverPadding(padding: EdgeInsets.only(bottom: 8)),
         _AlbumsBody(
           filteringEvents: widget.filteringStream.stream,
         ),
-        const SliverPadding(padding: EdgeInsets.only(bottom: 8)),
         _TracksBody(
           filteringEvents: widget.filteringStream.stream,
         ),
@@ -202,37 +213,43 @@ class AlbumsContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final albumsBucket = LiveAlbumsBucket.of(context);
+    if (albumsBucket.isEmpty) {
+      return const SliverPadding(padding: EdgeInsets.zero);
+    }
 
-    return SliverToBoxAdapter(
-      child: DarkTheme(
-        child: AnimatedSize(
-          alignment: Alignment.topCenter,
-          curve: Easing.standard,
-          duration: Durations.medium3,
-          reverseDuration: Durations.medium1,
-          child: albumsBucket.isEmpty
-              ? const SizedBox.shrink()
-              : SizedBox(
-                  height: 280,
-                  width: double.infinity,
-                  child: GridView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    scrollDirection: Axis.horizontal,
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
+    return SliverPadding(
+      padding: const EdgeInsets.only(top: 8),
+      sliver: SliverToBoxAdapter(
+        child: DarkTheme(
+          child: AnimatedSize(
+            alignment: Alignment.topCenter,
+            curve: Easing.standard,
+            duration: Durations.medium3,
+            reverseDuration: Durations.medium1,
+            child: albumsBucket.isEmpty
+                ? const SizedBox.shrink()
+                : SizedBox(
+                    height: 280,
+                    width: double.infinity,
+                    child: GridView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      scrollDirection: Axis.horizontal,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                      ),
+                      itemCount: albumsBucket.length,
+                      itemBuilder: (context, index) {
+                        final album = albumsBucket[index];
+
+                        return AlbumCard(
+                          album: album,
+                          pushRoute: true,
+                        );
+                      },
                     ),
-                    itemCount: albumsBucket.length,
-                    itemBuilder: (context, index) {
-                      final album = albumsBucket[index];
-
-                      return AlbumCard(
-                        album: album,
-                        pushRoute: true,
-                      );
-                    },
                   ),
-                ),
+          ),
         ),
       ),
     );
@@ -315,21 +332,27 @@ class TracksContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tracksBucket = LiveTracksBucket.of(context);
+    if (tracksBucket.isEmpty) {
+      return const SliverPadding(padding: EdgeInsets.zero);
+    }
 
-    return SliverList.builder(
-      itemCount: tracksBucket.length,
-      itemBuilder: (context, index) {
-        final track = tracksBucket[index];
+    return SliverPadding(
+      padding: const EdgeInsets.only(top: 8),
+      sliver: SliverList.builder(
+        itemCount: tracksBucket.length,
+        itemBuilder: (context, index) {
+          final track = tracksBucket[index];
 
-        return TrackTile(track: track);
-      },
+          return TrackTile(track: track);
+        },
+      ),
     );
   }
 }
 
 class _ArtistsBody extends StatefulWidget {
   const _ArtistsBody({
-    super.key,
+    // super.key,
     required this.filteringEvents,
   });
 
@@ -403,28 +426,31 @@ class ArtistsContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final artistsBucket = LiveArtistsBucket.of(context);
+    if (artistsBucket.isEmpty) {
+      return const SliverPadding(padding: EdgeInsets.zero);
+    }
 
-    return SliverToBoxAdapter(
-      child: SizedBox(
-        height: 56,
-        width: double.infinity,
-        child: ListView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          scrollDirection: Axis.horizontal,
-          itemCount: artistsBucket.length,
-          itemBuilder: (context, index) {
-            final artist = artistsBucket[index];
+    return SliverPadding(
+      padding: const EdgeInsets.only(top: 8),
+      sliver: SliverToBoxAdapter(
+        child: SizedBox(
+          height: 40,
+          width: double.infinity,
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            scrollDirection: Axis.horizontal,
+            itemCount: artistsBucket.length,
+            itemBuilder: (context, index) {
+              final artist = artistsBucket[index];
 
-            return Padding(
-              padding: EdgeInsets.only(
-                right: index == artistsBucket.length - 1 ? 0 : 8,
-              ),
-              child: SizedBox(
-                width: 180,
+              return Padding(
+                padding: EdgeInsets.only(
+                  right: index == artistsBucket.length - 1 ? 0 : 8,
+                ),
                 child: ArtistSearchTile(artist: artist),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );
@@ -441,24 +467,13 @@ class ArtistSearchTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-
-    return ListTile(
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(8)),
-      ),
-      tileColor: theme.colorScheme.surfaceContainerHigh,
-      // leading: ArtistCircle(artist: artist),
-      title: Text(
+    return ActionChip(
+      label: Text(
         artist.artist,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      // subtitle: Text(
-      //   "${l10n.albums(artist.numberOfAlbums)} · ${l10n.tracks(artist.numberOfTracks)}",
-      // ),
-      onTap: () => ArtistAlbumsPage.go(context, artist.id, true),
+      onPressed: () => ArtistAlbumsPage.go(context, artist.id, true),
     );
   }
 }

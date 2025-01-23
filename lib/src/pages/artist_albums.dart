@@ -120,24 +120,24 @@ class AlbumTracks extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    final tiles = data == null
+        ? const <Widget>[]
+        : data!.tracks
+            .map(
+              (e) => TrackTile(
+                track: e,
+                overrideColor: theme.colorScheme.surfaceContainerLowest,
+              ),
+            )
+            .toList();
+
     return SliverToBoxAdapter(
       child: AnimatedSize(
         alignment: Alignment.topCenter,
         curve: Easing.emphasizedDecelerate,
         duration: Durations.medium4,
         reverseDuration: Durations.medium1,
-        child: Column(
-          children: data == null
-              ? []
-              : data!.tracks
-                  .map(
-                    (e) => TrackTile(
-                      track: e,
-                      overrideColor: theme.colorScheme.surfaceContainerLowest,
-                    ),
-                  )
-                  .toList(),
-        ),
+        child: Column(children: tiles),
       ),
     );
   }

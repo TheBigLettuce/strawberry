@@ -21,6 +21,7 @@ import "dart:ui";
 
 import "package:flutter/foundation.dart";
 import "package:flutter/material.dart";
+import "package:flutter_animate/flutter_animate.dart";
 import "package:strawberry/main.dart";
 import "package:strawberry/src/platform/platform.dart";
 
@@ -40,6 +41,19 @@ class PlatformThumbnailProvider
       : loadThumbnail = _loadAlbumThumb;
   // const PlatformThumbnailProvider.track(this.id)
   //     : loadThumbnail = _loadTrackThumb;
+
+  static Widget defaultFrameBuilder(
+    BuildContext context,
+    Widget child,
+    int? frame,
+    bool wasSynchronouslyLoaded,
+  ) {
+    if (wasSynchronouslyLoaded) {
+      return child;
+    }
+
+    return frame == null ? const SizedBox.shrink() : child.animate().fadeIn();
+  }
 
   final int id;
 

@@ -18,6 +18,7 @@
 
 import "package:flutter/material.dart";
 import "package:go_router/go_router.dart";
+import "package:strawberry/exts.dart";
 import "package:strawberry/l10n/generated/app_localizations.dart";
 import "package:strawberry/src/pages/queue.dart";
 import "package:strawberry/src/platform/platform.dart";
@@ -73,23 +74,15 @@ class TrackTile extends StatelessWidget {
   const TrackTile({
     super.key,
     required this.track,
+    this.reverseIcon = false,
+    this.maxLines = 2,
     this.overrideColor,
   });
 
   final Color? overrideColor;
+  final bool reverseIcon;
+  final int maxLines;
   final Track track;
-
-  String formatDuration(int duration) {
-    var microseconds = Duration(milliseconds: duration).inMicroseconds;
-
-    final minutes = microseconds ~/ Duration.microsecondsPerMinute;
-    microseconds = microseconds.remainder(Duration.microsecondsPerMinute);
-
-    final seconds = microseconds ~/ Duration.microsecondsPerSecond;
-    microseconds = microseconds.remainder(Duration.microsecondsPerSecond);
-
-    return "$minutes:${seconds < 10 ? "0" : ""}$seconds";
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -97,30 +90,40 @@ class TrackTile extends StatelessWidget {
     final queue = QueueList.of(context);
     final inQueue = queue.containsTrack(track);
 
+    final avatar = CircleAvatar(
+      backgroundImage: PlatformThumbnailProvider.album(
+        track.albumId,
+        theme.brightness,
+      ),
+      child: queue.isCurrent(track.id) ? const IsPlayingIndicator() : null,
+    );
+
+    final addRemoveButton = AnimatedCrossFade(
+      firstChild: IconButton(
+        key: const ValueKey(true),
+        onPressed: () {
+          queue.removeTrack(track);
+        },
+        icon: const Icon(Icons.remove),
+      ),
+      secondChild: IconButton(
+        key: const ValueKey(false),
+        onPressed: () {
+          queue.add(track);
+        },
+        icon: const Icon(Icons.add),
+      ),
+      crossFadeState:
+          inQueue ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+      duration: Durations.medium3,
+      reverseDuration: Durations.medium1,
+    );
+
     return Column(
       children: [
         ListTile(
           tileColor: overrideColor,
-          trailing: AnimatedCrossFade(
-            firstChild: IconButton(
-              key: const ValueKey(true),
-              onPressed: () {
-                queue.removeTrack(track);
-              },
-              icon: const Icon(Icons.remove),
-            ),
-            secondChild: IconButton(
-              key: const ValueKey(false),
-              onPressed: () {
-                queue.add(track);
-              },
-              icon: const Icon(Icons.add),
-            ),
-            crossFadeState:
-                inQueue ? CrossFadeState.showFirst : CrossFadeState.showSecond,
-            duration: Durations.medium3,
-            reverseDuration: Durations.medium1,
-          ),
+          trailing: reverseIcon ? avatar : addRemoveButton,
           onTap: () {
             final isCurrent = queue.isCurrent(track.id);
 
@@ -135,17 +138,16 @@ class TrackTile extends StatelessWidget {
               queue.clearAndPlay([track]);
             }
           },
-          leading: CircleAvatar(
-            backgroundImage: PlatformThumbnailProvider.album(
-              track.albumId,
-              theme.brightness,
-            ),
-            child:
-                queue.isCurrent(track.id) ? const IsPlayingIndicator() : null,
+          leading: reverseIcon ? addRemoveButton : avatar,
+          title: Text(
+            track.name,
+            maxLines: maxLines,
+            overflow: TextOverflow.ellipsis,
           ),
-          title: Text(track.name),
           subtitle: Text(
-            "${track.track} · ${formatDuration(track.duration)}",
+            "${track.track} · ${track.duration.durationMilisFormatted}",
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
         DecoratedBox(
@@ -172,12 +174,18 @@ class IsPlayingIndicator extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: theme.colorScheme.surface.withValues(alpha: 0.75),
+        color: theme.colorScheme.surface.valueAlpha(0.75),
       ),
       child: Center(
         child: AnimatedCrossFade(
-          firstChild: const Icon(Icons.play_circle_outline_rounded),
-          secondChild: const Icon(Icons.pause_circle_outline_rounded),
+          firstChild: const Icon(
+            Icons.play_circle_outline_rounded,
+            key: ValueKey(true),
+          ),
+          secondChild: const Icon(
+            Icons.pause_circle_outline_rounded,
+            key: ValueKey(false),
+          ),
           crossFadeState:
               isPlaying ? CrossFadeState.showFirst : CrossFadeState.showSecond,
           duration: Durations.medium1,
@@ -222,6 +230,8 @@ class AlbumInfoBody extends StatelessWidget {
                     child: SizedBox.square(
                       dimension: 48,
                       child: Image(
+                        frameBuilder:
+                            PlatformThumbnailProvider.defaultFrameBuilder,
                         image: PlatformThumbnailProvider.album(
                           album.albumId,
                           theme.brightness,
@@ -249,15 +259,15 @@ class AlbumInfoBody extends StatelessWidget {
                           Text(
                             album.artist,
                             style: theme.textTheme.titleMedium?.copyWith(
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.9),
+                              color:
+                                  theme.colorScheme.onSurface.valueAlpha(0.9),
                             ),
                           ),
                           Text(
-                            album.formatYears(),
+                            album.yearsFormatted,
                             style: theme.textTheme.titleSmall?.copyWith(
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.8),
+                              color:
+                                  theme.colorScheme.onSurface.valueAlpha(0.8),
                             ),
                           ),
                         ],
@@ -277,7 +287,7 @@ class AlbumInfoBody extends StatelessWidget {
               Text(
                 l10n.items(album.numberOfSongs),
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                  color: theme.colorScheme.onSurface.valueAlpha(0.8),
                 ),
               ),
               Row(
@@ -311,13 +321,9 @@ class AlbumInfoBody extends StatelessWidget {
                 ],
               ),
               Text(
-                l10n.minutes(
-                  Duration(
-                    milliseconds: tracks.fold(0, (i, e) => i + e.duration),
-                  ).inMinutes,
-                ),
+                l10n.minutes(tracks.countDurationMinutes()),
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                  color: theme.colorScheme.onSurface.valueAlpha(0.8),
                 ),
               ),
             ],

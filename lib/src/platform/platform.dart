@@ -20,6 +20,7 @@ import "dart:async";
 
 import "package:flutter/foundation.dart";
 import "package:flutter/material.dart";
+import "package:strawberry/exts.dart";
 import "package:strawberry/src/platform/generated/platform_api.g.dart"
     as platform;
 
@@ -35,8 +36,8 @@ export "package:strawberry/src/platform/generated/platform_api.g.dart"
         Queue,
         Track;
 
-extension FormatYearsAlbumExt on platform.Album {
-  String formatYears() {
+extension YearsFormattedAlbumExt on platform.Album {
+  String get yearsFormatted {
     if (firstYear == 0 && secondYear == 0) {
       return "";
     }
@@ -46,6 +47,23 @@ extension FormatYearsAlbumExt on platform.Album {
     }
 
     return "$firstYear—$album";
+  }
+}
+
+extension IterableTracksDurationExt on Iterable<platform.Track> {
+  int countDurationMinutes() => Duration(
+        milliseconds: fold(0, (i, e) => i + e.duration),
+      ).inMinutes;
+}
+
+extension AlbumFirstLettersExt on platform.Artist {
+  String get firstLetters {
+    final str = artist.runes.take(2).toList();
+    if (str.first.isChineseRune) {
+      return String.fromCharCode(str.first);
+    }
+
+    return String.fromCharCodes(str);
   }
 }
 
@@ -1427,7 +1445,6 @@ class _QueueList extends QueueList {
     }
   }
 
-  @override
   void _removeAtAll(List<int> idxs) {
     final idxsSorted = idxs.toList()..sort();
 

@@ -57,7 +57,7 @@ Future<void> main() async {
     await rootBundle.load("assets/strawberry_placeholder_dark.png"),
   );
 
-  ThemeData buildTheme(Brightness brightness, Color accentColor) {
+  ThemeData buildTheme(Brightness brightness) {
     final colorScheme = switch (brightness) {
       Brightness.dark => MaterialTheme.darkScheme(),
       Brightness.light => MaterialTheme.lightScheme(),
@@ -146,8 +146,8 @@ Future<void> main() async {
         debugShowCheckedModeBanner: false,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        theme: buildTheme(Brightness.light, Colors.purpleAccent),
-        darkTheme: buildTheme(Brightness.dark, Colors.purpleAccent),
+        theme: buildTheme(Brightness.light),
+        darkTheme: buildTheme(Brightness.dark),
         routerConfig: routes,
       ),
     ),
